@@ -1,0 +1,42 @@
+.feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18rpx;
+  padding: 80rpx 0;
+}
+
+.feedback__spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 6rpx solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: feedback-spin 0.8s linear infinite;
+}
+
+@keyframes feedback-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.feedback__empty-icon {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 16rpx;
+  background: #e2e8f0;
+}
+
+.feedback__text {
+  font-size: 26rpx;
+  color: #94a3b8;
+}
+
+.feedback__retry {
+  margin-top: 8rpx;
+}

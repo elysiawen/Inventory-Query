@@ -1,0 +1,24 @@
+.category-card {
+  margin-top: 20rpx;
+}
+
+.category-card__name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.category-card__time {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #94a3b8;
+}
+
+.category-card__actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 2rpx solid #f1f5f9;
+}

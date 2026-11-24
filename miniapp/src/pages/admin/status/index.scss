@@ -1,0 +1,38 @@
+.stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.stat {
+  width: calc(33.33% - 11rpx);
+  box-sizing: border-box;
+  padding: 20rpx;
+  border-radius: 16rpx;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.stat__value {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.stat__label {
+  font-size: 22rpx;
+  color: #94a3b8;
+}
+
+.status-refresh-btn {
+  margin-top: 24rpx;
+}
+
+.status-refresh {
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 600;
+}

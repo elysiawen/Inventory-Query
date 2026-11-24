@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum StockType {
+  IN
+  OUT
+}
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  passwordHash String
+  avatar       String?
+  role         Role       @default(USER)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  stockLogs    StockLog[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  items     Item[]
+}
+
+model Item {
+  id            String     @id @default(cuid())
+  name          String
+  model         String
+  categoryId    String
+  category      Category   @relation(fields: [categoryId], references: [id])
+  image         String?
+  price         Decimal    @default(0) @db.Decimal(12, 2)
+  remark        String?
+  supplier      String?
+  innerDiameter Float      @default(0)
+  outerDiameter Float      @default(0)
+  height        Float      @default(0)
+  quantity      Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  stockLogs     StockLog[]
+
+  @@index([categoryId])
+  @@index([updatedAt])
+}
+
+model StockLog {
+  id         String    @id @default(cuid())
+  itemId     String
+  item       Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type       StockType
+  quantity   Int
+  operatorId String
+  operator   User      @relation(fields: [operatorId], references: [id])
+  remark     String?
+  createdAt  DateTime  @default(now())
+
+  @@index([itemId])
+  @@index([createdAt])
+}
