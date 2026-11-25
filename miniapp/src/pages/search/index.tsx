@@ -149,21 +149,34 @@ export default function SearchPage() {
     setPage(1)
   }
 
+  function toggleFilter() {
+    setShowFilter(!showFilter)
+  }
+
   const items = result?.data || []
 
   return (
     <View className="page">
-      <View className="search-bar">
-        <Input
-          className="input search-bar__input"
-          value={keyword}
-          placeholder="搜索物品名称或型号"
-          confirmType="search"
-          onInput={(e) => setKeyword(e.detail.value)}
-          onConfirm={applySearch}
-        />
-        <View className="btn btn--primary search-bar__btn" onClick={applySearch}>
-          <Text className="search-bar__btn-text">搜索</Text>
+      {/* 搜索条吸顶，下滑时始终可见；分类与尺寸都收进「高级」面板 */}
+      <View className="search-sticky">
+        <View className="search-bar">
+          <Input
+            className="input search-bar__input"
+            value={keyword}
+            placeholder="搜索物品名称或型号"
+            confirmType="search"
+            onInput={(e) => setKeyword(e.detail.value)}
+            onConfirm={applySearch}
+          />
+          <View className="btn btn--primary search-bar__btn" onClick={applySearch}>
+            <Text className="search-bar__btn-text">搜索</Text>
+          </View>
+          <View
+            className={`search-bar__more${showFilter ? ' search-bar__more--active' : ''}`}
+            onClick={toggleFilter}
+          >
+            <Text className="search-bar__more-text">高级</Text>
+          </View>
         </View>
       </View>
 
@@ -194,18 +207,43 @@ export default function SearchPage() {
             <Text className="toolbar__text">{sortOrder === 'desc' ? '降序' : '升序'}</Text>
           </View>
         </View>
-        <View className="toolbar__cell">
-          <View className="toolbar__item" onClick={() => setShowFilter(!showFilter)}>
-            <Text className={`toolbar__text${showFilter ? ' toolbar__text--active' : ''}`}>
-              尺寸筛选
-            </Text>
-          </View>
-        </View>
       </View>
+
+      {/* 高级筛选浮层：覆盖在页面上方，点击遮罩收起 */}
+      {showFilter ? (
+        <View className="filter-mask" onClick={() => setShowFilter(false)} />
+      ) : null}
 
       {showFilter ? (
         <View className="card filter-panel">
-          <Text className="filter-panel__title">尺寸筛选（mm）</Text>
+          <Text className="filter-panel__title">分类</Text>
+          <ScrollView scrollX className="chips chips--panel">
+            <View className="chips__inner">
+              <View
+                className={`chip${categoryId === '' ? ' chip--active' : ''}`}
+                onClick={() => {
+                  setCategoryId('')
+                  setPage(1)
+                }}
+              >
+                全部分类
+              </View>
+              {categories.map((category) => (
+                <View
+                  key={category.id}
+                  className={`chip${categoryId === category.id ? ' chip--active' : ''}`}
+                  onClick={() => {
+                    setCategoryId(category.id)
+                    setPage(1)
+                  }}
+                >
+                  {category.name}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+
+          <Text className="filter-panel__title filter-panel__title--gap">尺寸筛选（mm）</Text>
           {DIM_FIELDS.map((field) => {
             const value = dimInput[field.key]
             const update = (patch: Partial<DimValue>) =>
@@ -269,32 +307,6 @@ export default function SearchPage() {
           </View>
         </View>
       ) : null}
-
-      <ScrollView scrollX className="chips">
-        <View className="chips__inner">
-          <View
-            className={`chip${categoryId === '' ? ' chip--active' : ''}`}
-            onClick={() => {
-              setCategoryId('')
-              setPage(1)
-            }}
-          >
-            全部分类
-          </View>
-          {categories.map((category) => (
-            <View
-              key={category.id}
-              className={`chip${categoryId === category.id ? ' chip--active' : ''}`}
-              onClick={() => {
-                setCategoryId(category.id)
-                setPage(1)
-              }}
-            >
-              {category.name}
-            </View>
-          ))}
-        </View>
-      </ScrollView>
 
       <View className="result-meta">
         <Text className="result-meta__text">共 {result?.total ?? 0} 条结果</Text>
