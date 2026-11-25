@@ -2,6 +2,12 @@
   margin-top: 20rpx;
 }
 
+.list-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .pager-bar__size {
   display: flex;
   align-items: center;

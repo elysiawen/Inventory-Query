@@ -32,9 +32,18 @@ export default function ItemCard({ item, footer }: { item: ItemRow; footer?: Rea
       </View>
 
       <View className="item-card__dims">
-        <Text className="item-card__dim">内径 {item.innerDiameter}mm</Text>
-        <Text className="item-card__dim">外径 {item.outerDiameter}mm</Text>
-        <Text className="item-card__dim">高 {item.height}mm</Text>
+        <View className="item-card__dim">
+          <Text className="item-card__dim-label">内径/柄径 (mm)</Text>
+          <Text className="item-card__dim-value">{item.innerDiameter}</Text>
+        </View>
+        <View className="item-card__dim">
+          <Text className="item-card__dim-label">外径 (mm)</Text>
+          <Text className="item-card__dim-value">{item.outerDiameter}</Text>
+        </View>
+        <View className="item-card__dim">
+          <Text className="item-card__dim-label">高度/总长 (mm)</Text>
+          <Text className="item-card__dim-value">{item.height}</Text>
+        </View>
       </View>
 
       {item.remark ? <Text className="item-card__remark">备注：{item.remark}</Text> : null}

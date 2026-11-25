@@ -15,7 +15,7 @@ export default function Modal({ visible, title, onClose, children, footer }: Mod
 
   return (
     <View className="modal">
-      <View className="modal__mask" onClick={onClose} />
+      <View className="modal__mask" />
       <View className="modal__panel">
         <View className="modal__header">
           <Text className="modal__title">{title}</Text>

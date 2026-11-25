@@ -40,3 +40,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "头像更新失败，请稍后重试" }, { status: 400 });
   }
 }
+
+/** DELETE 删除自己的头像 */
+export async function DELETE(req: NextRequest) {
+  const guard = await requireAuth(req);
+  if (guard.response) return guard.response;
+
+  const user = await prisma.user.update({
+    where: { id: guard.user!.id },
+    data: { avatar: null },
+    select: userSelect,
+  });
+  await removeUploadedFile(guard.user!.avatar);
+  return NextResponse.json(user);
+}

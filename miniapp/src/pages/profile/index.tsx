@@ -2,7 +2,7 @@ import { Image, Input, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { useEffect, useState } from 'react'
 import TabNav from '../../components/TabNav'
-import { fetchMe, updateProfile } from '../../services/api'
+import { fetchMe, removeAvatar as removeMyAvatar, updateProfile } from '../../services/api'
 import { assetUrl, uploadAvatar } from '../../services/request'
 import { clearAuth, getStoredUser, getToken, setStoredUser } from '../../services/storage'
 import type { AuthUser } from '../../services/types'
@@ -66,6 +66,27 @@ export default function ProfilePage() {
       const latest = await uploadAvatar(filePath)
       applyUser(latest)
       Taro.showToast({ title: '头像已更新', icon: 'success' })
+    } catch (e) {
+      Taro.showToast({ title: errorMessage(e), icon: 'none' })
+    } finally {
+      setAvatarBusy(false)
+    }
+  }
+
+  async function removeAvatar() {
+    if (avatarBusy) return
+    const res = await Taro.showModal({
+      title: '删除头像',
+      content: '确定删除当前头像吗？',
+      confirmText: '删除',
+      confirmColor: '#dc2626'
+    })
+    if (!res.confirm) return
+    setAvatarBusy(true)
+    try {
+      const latest = await removeMyAvatar()
+      applyUser(latest)
+      Taro.showToast({ title: '头像已删除', icon: 'success' })
     } catch (e) {
       Taro.showToast({ title: errorMessage(e), icon: 'none' })
     } finally {
@@ -165,7 +186,14 @@ export default function ProfilePage() {
             </View>
           </View>
           <Text className="profile-card__id">ID：{user?.id || '-'}</Text>
-          <Text className="profile-card__hint">点击头像可更换</Text>
+          <Text className="profile-card__hint">
+            {user?.avatar ? '点击头像可更换' : '点击头像可上传'}
+          </Text>
+          {user?.avatar ? (
+            <Text className="profile-card__remove" onClick={() => void removeAvatar()}>
+              删除头像
+            </Text>
+          ) : null}
         </View>
       </View>
 

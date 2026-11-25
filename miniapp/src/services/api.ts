@@ -23,6 +23,9 @@ export const login = (username: string, password: string) =>
 
 export const fetchMe = () => request<AuthUser>('/api/auth/me')
 
+/** 删除自己的头像 */
+export const removeAvatar = () => request<AuthUser>('/api/auth/avatar', { method: 'DELETE' })
+
 /** 修改自己的用户名 / 密码（改密码需带原密码） */
 export const updateProfile = (data: { username?: string; password?: string; oldPassword?: string }) =>
   request<AuthUser>('/api/auth/profile', { method: 'PUT', data })

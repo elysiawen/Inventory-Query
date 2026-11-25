@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import AdminNav from '../../../components/AdminNav'
 import { Empty, ErrorState, Loading } from '../../../components/Feedback'
 import ItemCard from '../../../components/ItemCard'
+import ItemImportModal from '../../../components/ItemImportModal'
 import Modal from '../../../components/Modal'
 import Pager from '../../../components/Pager'
 import TabNav from '../../../components/TabNav'
@@ -79,6 +80,7 @@ export default function AdminItemsPage() {
   const [stockTarget, setStockTarget] = useState<ItemRow | null>(null)
   const [stockQty, setStockQty] = useState('')
   const [stockRemark, setStockRemark] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
   const [stockBusy, setStockBusy] = useState(false)
 
   const admin = isAdmin()
@@ -91,7 +93,7 @@ export default function AdminItemsPage() {
     fetchCategories()
       .then((list) => setCategories(list))
       .catch((e) => toast(errorMessage(e)))
-  }, [])
+  }, [refreshKey])
 
   useEffect(() => {
     if (!isAdmin()) return
@@ -176,9 +178,9 @@ export default function AdminItemsPage() {
 
     const numeric = [
       ['单价', form.price],
-      ['内径', form.innerDiameter],
+      ['内径/柄径', form.innerDiameter],
       ['外径', form.outerDiameter],
-      ['高度', form.height]
+      ['高度/总长', form.height]
     ] as const
     for (const [label, value] of numeric) {
       if (value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0)) {
@@ -331,8 +333,13 @@ export default function AdminItemsPage() {
 
       <View className="list-head">
         <Text className="list-head__total">共 {result?.total ?? 0} 个物品</Text>
-        <View className="btn btn--sm btn--primary" onClick={openCreate}>
-          <Text className="list-head__btn-text">＋ 上架物品</Text>
+        <View className="list-head__actions">
+          <View className="btn btn--sm" onClick={() => setImportOpen(true)}>
+            <Text>导入表格</Text>
+          </View>
+          <View className="btn btn--sm btn--primary" onClick={openCreate}>
+            <Text className="list-head__btn-text">＋ 上架物品</Text>
+          </View>
         </View>
       </View>
 
@@ -463,7 +470,7 @@ export default function AdminItemsPage() {
               className="input dim-row__input"
               type="digit"
               value={form.innerDiameter}
-              placeholder="内径"
+              placeholder="内径/柄径"
               onInput={(e) => setForm({ ...form, innerDiameter: e.detail.value })}
             />
             <Text className="dim-row__sep">×</Text>
@@ -479,7 +486,7 @@ export default function AdminItemsPage() {
               className="input dim-row__input"
               type="digit"
               value={form.height}
-              placeholder="高度"
+              placeholder="高度/总长"
               onInput={(e) => setForm({ ...form, height: e.detail.value })}
             />
           </View>
@@ -617,6 +624,12 @@ export default function AdminItemsPage() {
           />
         </View>
       </Modal>
+
+      <ItemImportModal
+        visible={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={reload}
+      />
 
       <TabNav current={admin ? 'admin' : 'search'} />
     </View>

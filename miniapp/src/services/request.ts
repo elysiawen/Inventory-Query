@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 import { clearAuth, getToken, setToken } from './storage'
-import type { AuthUser, UserRow } from './types'
+import type { AuthUser, ImportReport, UserRow } from './types'
 
 /** 后端服务地址：由 config/index.ts 的 defineConstants 在构建期注入（来源 .env 的 TARO_APP_API_BASE） */
 declare const __API_BASE__: string
@@ -80,7 +80,8 @@ export function assetUrl(path: string | null | undefined): string {
 async function uploadJson<T extends { error?: string }>(
   path: string,
   filePath: string,
-  failMessage: string
+  failMessage: string,
+  formData?: Record<string, string>
 ): Promise<T> {
   const token = getToken()
   let res: { statusCode: number; data: string }
@@ -89,6 +90,7 @@ async function uploadJson<T extends { error?: string }>(
       url: `${REQUEST_BASE}${path}`,
       filePath,
       name: 'file',
+      formData,
       header: token ? { Authorization: `Bearer ${token}` } : {}
     })
   } catch {
@@ -142,6 +144,23 @@ export async function uploadUserAvatar(userId: string, filePath: string): Promis
   )
   if (!data.id) throw new Error('头像上传失败')
   return data
+}
+
+export interface ImportUploadResponse {
+  report?: ImportReport
+  created?: number
+  updated?: number
+  skipped?: number
+  newCategories?: string[]
+  error?: string
+}
+
+/** Excel 批量导入：dryRun=1 只返回预览报告，dryRun=0 按选项写入 */
+export async function uploadItemImport(
+  filePath: string,
+  formData: Record<string, string>
+): Promise<ImportUploadResponse> {
+  return uploadJson<ImportUploadResponse>('/api/items/import', filePath, '导入失败', formData)
 }
 
 /** 用当前 token 换取新 token，实现活跃续期；失败静默，不打断用户操作 */

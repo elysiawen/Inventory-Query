@@ -27,6 +27,7 @@ export default function UsersPage() {
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarRemoving, setAvatarRemoving] = useState(false);
   const avatarRef = useRef<HTMLInputElement>(null);
   const me = getStoredUser();
   const isSelf = !!editing && editing.id === me?.id;
@@ -130,6 +131,22 @@ export default function UsersPage() {
       toast.error((err as Error).message);
     } finally {
       setAvatarUploading(false);
+    }
+  }
+  async function handleRemoveAvatar() {
+    const targetId = editing?.id;
+    if (!targetId) return;
+    setAvatarRemoving(true);
+    try {
+      const updated = (await api.delete(`/api/users/${targetId}/avatar`)) as UserRow;
+      setList((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      setEditing((prev) => (prev && prev.id === targetId ? updated : prev));
+      if (isSelf) void refreshStoredUser();
+      toast.success("头像已删除");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAvatarRemoving(false);
     }
   }
   async function handleDelete(u: UserRow) {
@@ -329,11 +346,21 @@ export default function UsersPage() {
                 <button
                   type="button"
                   onClick={() => avatarRef.current?.click()}
-                  disabled={avatarUploading}
+                  disabled={avatarUploading || avatarRemoving}
                   className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
                 >
                   {avatarUploading ? "上传中…" : "更换头像"}
                 </button>
+                {editing.avatar && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveAvatar()}
+                    disabled={avatarUploading || avatarRemoving}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {avatarRemoving ? "删除中…" : "删除头像"}
+                  </button>
+                )}
                 <input
                   ref={avatarRef}
                   type="file"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, getStoredUser, getToken, logout, refreshStoredUser } from "@/lib/api";
@@ -46,17 +46,17 @@ type DimKey = "inner" | "outer" | "height";
 
 const emptyDim: DimFilter = { mode: "exact", exact: "", min: "", max: "" };
 const DIMS: { key: DimKey; label: string }[] = [
-  { key: "inner", label: "内径" },
+  { key: "inner", label: "内径/柄径" },
   { key: "outer", label: "外径" },
-  { key: "height", label: "高度" },
+  { key: "height", label: "高度/总长" },
 ];
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "updatedAt", label: "更新时间" },
   { value: "name", label: "名称" },
-  { value: "innerDiameter", label: "内径" },
+  { value: "innerDiameter", label: "内径/柄径" },
   { value: "outerDiameter", label: "外径" },
-  { value: "height", label: "高度" },
+  { value: "height", label: "高度/总长" },
   { value: "price", label: "价格" },
   { value: "quantity", label: "库存" },
 ];
@@ -175,9 +175,9 @@ export default function SearchPage() {
   function applySearch() {
     // 范围筛选先校验，避免最小值大于最大值时静默返回空结果
     const dimEntries: [string, DimFilter][] = [
-      ["内径", dims.inner],
+      ["内径/柄径", dims.inner],
       ["外径", dims.outer],
-      ["高度", dims.height],
+      ["高度/总长", dims.height],
     ];
     for (const [label, dim] of dimEntries) {
       if (
@@ -289,20 +289,20 @@ export default function SearchPage() {
 
       <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
         {/* 筛选区 */}
-        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 sm:mb-6 sm:p-4">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-end sm:gap-3">
             <div className="w-full sm:min-w-[200px] sm:flex-1">
-              <span className="mb-1 block text-xs text-slate-500">关键词（名称 / 型号）</span>
+              <span className="mb-1 hidden text-xs text-slate-500 sm:block">关键词（名称 / 型号）</span>
               <input
                 className={inputCls}
-                placeholder="输入关键词搜索…"
+                placeholder="关键词（名称 / 型号）"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && applySearch()}
               />
             </div>
             <div className="w-full sm:w-auto">
-              <span className="mb-1 block text-xs text-slate-500">分类</span>
+              <span className="mb-1 hidden text-xs text-slate-500 sm:block">分类</span>
               <select
                 className={`${inputCls} sm:w-48`}
                 value={categoryId}
@@ -316,62 +316,56 @@ export default function SearchPage() {
                 ))}
               </select>
             </div>
-            <button
-              onClick={applySearch}
-              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              查询
-            </button>
-            <button
-              onClick={resetSearch}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              重置
-            </button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
+              <button
+                onClick={applySearch}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                查询
+              </button>
+              <button
+                onClick={resetSearch}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                重置
+              </button>
+            </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:mt-4 sm:grid-cols-3 sm:gap-3">
             {DIMS.map((d) => {
               const dim = dims[d.key];
               const setDim = (patch: Partial<DimFilter>) =>
                 setDims((prev) => ({ ...prev, [d.key]: { ...prev[d.key], ...patch } }));
-              const segCls = (active: boolean) =>
-                `rounded px-2 py-0.5 transition ${
-                  active ? "bg-white text-slate-700 shadow-sm" : "text-slate-400 hover:text-slate-600"
-                }`;
               return (
-                <div key={d.key}>
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs text-slate-500">{d.label} (mm)</span>
-                    <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
+                <div key={d.key} className="flex items-center gap-1.5">
+                  <span className="flex w-[78px] shrink-0 items-baseline gap-0.5 whitespace-nowrap text-xs text-slate-500">
+                    {d.label}
+                    <span className="text-[10px] text-slate-400">mm</span>
+                  </span>
+                  {dim.mode === "exact" ? (
+                    <>
+                      <input
+                        className={`${inputCls} min-w-0 flex-1`}
+                        type="number"
+                        step="0.01"
+                        placeholder="精确值"
+                        value={dim.exact}
+                        onChange={(e) => setDim({ exact: e.target.value })}
+                        onKeyDown={(e) => e.key === "Enter" && applySearch()}
+                      />
                       <button
-                        onClick={() => setDim({ mode: "exact" })}
-                        className={segCls(dim.mode === "exact")}
-                      >
-                        精确
-                      </button>
-                      <button
+                        type="button"
                         onClick={() => setDim({ mode: "range" })}
-                        className={segCls(dim.mode === "range")}
+                        className="shrink-0 px-1 text-[11px] text-blue-600 hover:text-blue-700"
                       >
                         范围
                       </button>
-                    </div>
-                  </div>
-                  {dim.mode === "exact" ? (
-                    <input
-                      className={inputCls}
-                      type="number"
-                      step="0.01"
-                      placeholder="精确值"
-                      value={dim.exact}
-                      onChange={(e) => setDim({ exact: e.target.value })}
-                      onKeyDown={(e) => e.key === "Enter" && applySearch()}
-                    />
+                    </>
                   ) : (
-                    <div className="flex items-center gap-1">
+                    <>
                       <input
-                        className={inputCls}
+                        className={`${inputCls} min-w-0 flex-1`}
                         type="number"
                         step="0.01"
                         placeholder="最小"
@@ -379,9 +373,9 @@ export default function SearchPage() {
                         onChange={(e) => setDim({ min: e.target.value })}
                         onKeyDown={(e) => e.key === "Enter" && applySearch()}
                       />
-                      <span className="text-slate-400">~</span>
+                      <span className="shrink-0 text-slate-400">~</span>
                       <input
-                        className={inputCls}
+                        className={`${inputCls} min-w-0 flex-1`}
                         type="number"
                         step="0.01"
                         placeholder="最大"
@@ -389,7 +383,14 @@ export default function SearchPage() {
                         onChange={(e) => setDim({ max: e.target.value })}
                         onKeyDown={(e) => e.key === "Enter" && applySearch()}
                       />
-                    </div>
+                      <button
+                        type="button"
+                        onClick={() => setDim({ mode: "exact" })}
+                        className="shrink-0 px-1 text-[11px] text-blue-600 hover:text-blue-700"
+                      >
+                        精确
+                      </button>
+                    </>
                   )}
                 </div>
               );
@@ -437,99 +438,183 @@ export default function SearchPage() {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {data.data.map((item) => (
-                <div
-                  key={item.id}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
-                >
-                  <div className="relative flex h-44 items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-                    {item.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-full w-full object-contain p-3 transition duration-300 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1.5 text-slate-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-4.35-4.35a1 1 0 0 0-1.42 0L6 20" /></svg>
-                        <span className="text-xs">暂无图片</span>
+                <Fragment key={item.id}>
+                  {/* 移动端：横向紧凑卡片 */}
+                  <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-slate-300 hover:shadow-md md:hidden">
+                    <div className="flex gap-3">
+                      <div
+                        className={`flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-50 ${
+                          item.image
+                            ? "border border-slate-200"
+                            : "border border-dashed border-slate-300"
+                        }`}
+                      >
+                        {item.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-400">无图</span>
+                        )}
                       </div>
-                    )}
-                    {item.quantity <= 0 && (
-                      <span className="absolute left-3 top-3 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-medium text-white">
-                        缺货
-                      </span>
-                    )}
-                    <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[10px] text-slate-500 shadow-sm">
-                      {item.category.name}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col p-4">
-                    <h3 className="truncate font-semibold text-slate-800">{item.name}</h3>
-                    <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
-                      <span className="truncate">型号 {item.model}</span>
-                      {item.supplier && (
-                        <>
-                          <span className="h-3 w-px shrink-0 bg-slate-300" />
-                          <span className="truncate">供应商 {item.supplier}</span>
-                        </>
-                      )}
-                    </p>
 
-                    <div className="mt-3">
-                      <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-lg bg-slate-50 py-2 text-center text-xs">
-                        <div>
-                          <div className="text-slate-400">内径 (mm)</div>
-                          <div className="mt-0.5 font-medium text-slate-700">
-                            {item.innerDiameter}
-                          </div>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="truncate text-base font-semibold text-slate-800">
+                            {item.name}
+                          </h3>
+                          <span
+                            className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              item.quantity <= 0
+                                ? "bg-red-50 text-red-600"
+                                : "bg-blue-50 text-blue-600"
+                            }`}
+                          >
+                            {item.quantity <= 0 ? "缺货" : `库存 ${item.quantity}`}
+                          </span>
                         </div>
-                        <div>
-                          <div className="text-slate-400">外径 (mm)</div>
-                          <div className="mt-0.5 font-medium text-slate-700">
-                            {item.outerDiameter}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-slate-400">高度 (mm)</div>
-                          <div className="mt-0.5 font-medium text-slate-700">
-                            {item.height}
-                          </div>
-                        </div>
+                        <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                          <span className="truncate">型号 {item.model}</span>
+                          {item.supplier && (
+                            <>
+                              <span className="h-3 w-px shrink-0 bg-slate-200" />
+                              <span className="truncate">{item.supplier}</span>
+                            </>
+                          )}
+                        </p>
+                        <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                          <span className="truncate">{item.category.name}</span>
+                          <span className="h-3 w-px shrink-0 bg-slate-200" />
+                          <span className="shrink-0 font-medium text-slate-700">
+                            ¥{Number(item.price).toFixed(2)}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 grid grid-cols-3 divide-x divide-slate-200 rounded-lg bg-slate-50 py-1.5 text-center">
+                      <div className="min-w-0 px-1">
+                        <p className="truncate text-[10px] text-slate-400">内径/柄径 (mm)</p>
+                        <p className="mt-0.5 truncate text-sm font-medium tabular-nums text-slate-700">
+                          {item.innerDiameter}
+                        </p>
+                      </div>
+                      <div className="min-w-0 px-1">
+                        <p className="truncate text-[10px] text-slate-400">外径 (mm)</p>
+                        <p className="mt-0.5 truncate text-sm font-medium tabular-nums text-slate-700">
+                          {item.outerDiameter}
+                        </p>
+                      </div>
+                      <div className="min-w-0 px-1">
+                        <p className="truncate text-[10px] text-slate-400">高度/总长 (mm)</p>
+                        <p className="mt-0.5 truncate text-sm font-medium tabular-nums text-slate-700">
+                          {item.height}
+                        </p>
                       </div>
                     </div>
 
                     {item.remark && (
-                      <div className="mt-3 mb-3 line-clamp-1 text-xs text-slate-400">
+                      <p className="mt-2 line-clamp-1 text-xs text-slate-400">
                         备注：{item.remark}
-                      </div>
+                      </p>
                     )}
+                  </div>
 
-                    <div className="mt-auto flex items-end justify-between border-t border-slate-100 pt-3">
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            item.quantity <= 0 ? "bg-red-500" : "bg-green-500"
-                          }`}
+                  {/* 桌面端：纵向卡片 */}
+                  <div className="hidden flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg md:flex">
+                    <div className="relative flex h-40 items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+                      {item.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-contain p-3"
                         />
-                        <span className="text-slate-400">库存</span>
-                        <span
-                          className={`font-semibold ${
-                            item.quantity <= 0 ? "text-red-500" : "text-slate-700"
-                          }`}
-                        >
-                          {item.quantity}
+                      ) : (
+                        <span className="text-xs text-slate-400">无图</span>
+                      )}
+                      <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-[10px] text-slate-500 shadow-sm">
+                        {item.category.name}
+                      </span>
+                      {item.quantity <= 0 && (
+                        <span className="absolute left-3 top-3 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-medium text-white">
+                          缺货
                         </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-1 flex-col p-4">
+                      <h3 className="truncate font-semibold text-slate-800">
+                        {item.name}
+                      </h3>
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
+                        <span className="truncate">型号 {item.model}</span>
+                        {item.supplier && (
+                          <>
+                            <span className="h-3 w-px shrink-0 bg-slate-300" />
+                            <span className="truncate">供应商 {item.supplier}</span>
+                          </>
+                        )}
+                      </p>
+
+                      <div className="mt-3 grid grid-cols-3 divide-x divide-slate-200 rounded-lg bg-slate-50 py-1.5 text-center">
+                        <div className="min-w-0 px-1">
+                          <p className="truncate text-[10px] text-slate-400">内径/柄径 (mm)</p>
+                          <p className="mt-0.5 truncate text-sm font-medium tabular-nums text-slate-700">
+                            {item.innerDiameter}
+                          </p>
+                        </div>
+                        <div className="min-w-0 px-1">
+                          <p className="truncate text-[10px] text-slate-400">外径 (mm)</p>
+                          <p className="mt-0.5 truncate text-sm font-medium tabular-nums text-slate-700">
+                            {item.outerDiameter}
+                          </p>
+                        </div>
+                        <div className="min-w-0 px-1">
+                          <p className="truncate text-[10px] text-slate-400">高度/总长 (mm)</p>
+                          <p className="mt-0.5 truncate text-sm font-medium tabular-nums text-slate-700">
+                            {item.height}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-lg font-semibold leading-none text-blue-600">
-                        <span className="mr-0.5 text-xs font-normal text-blue-500">¥</span>
-                        {item.price}
+
+                      {item.remark && (
+                        <p className="mt-2 line-clamp-1 text-xs text-slate-400">
+                          备注：{item.remark}
+                        </p>
+                      )}
+
+                      <div className="mt-auto pt-3">
+                        <div className="flex items-end justify-between border-t border-slate-100 pt-3">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                item.quantity <= 0 ? "bg-red-500" : "bg-green-500"
+                              }`}
+                            />
+                            <span className="text-slate-400">库存</span>
+                            <span
+                              className={`font-semibold ${
+                                item.quantity <= 0 ? "text-red-500" : "text-slate-700"
+                              }`}
+                            >
+                              {item.quantity}
+                            </span>
+                          </div>
+                          <div className="text-lg font-semibold leading-none text-blue-600">
+                            <span className="mr-0.5 text-xs font-normal text-blue-500">¥</span>
+                            {Number(item.price).toFixed(2)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </Fragment>
               ))}
             </div>
             <div className="mt-6">

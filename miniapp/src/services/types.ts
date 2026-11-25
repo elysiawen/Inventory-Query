@@ -93,3 +93,63 @@ export interface ItemPayload {
   image: string | null
   quantity?: number
 }
+
+/** Excel 导入预览中的一条物品 */
+export interface ImportPreviewRow {
+  row: number
+  category: string
+  name: string
+  model: string
+  price: number
+  quantities: number[]
+  heights: number[]
+  labels: string[]
+  innerDiameter: number
+  outerDiameter: number
+  compound: boolean
+  remark: string | null
+}
+
+export interface ImportDuplicateRow {
+  row: number
+  category: string
+  name: string
+  model: string
+  currentQuantity: number
+  currentPrice: number
+}
+
+export interface ImportCompoundRow {
+  row: number
+  name: string
+  model: string
+  raw: string
+  parsed: { innerDiameter: number; outerDiameter: number; height: number }
+  extraHeights: number[]
+  heights: number[]
+  quantities: number[]
+  labels: string[]
+}
+
+export interface ImportReport {
+  total: number
+  valid: number
+  rows: ImportPreviewRow[]
+  duplicates: ImportDuplicateRow[]
+  compounds: ImportCompoundRow[]
+  invalid: { row: number; reason: string }[]
+  newCategories: string[]
+}
+
+export interface ImportOptions {
+  duplicates: 'skip' | 'update' | 'create'
+  compound: 'first' | 'split' | 'skip'
+  invalid: 'abort' | 'skip'
+}
+
+export interface ImportResult {
+  created: number
+  updated: number
+  skipped: number
+  newCategories: string[]
+}

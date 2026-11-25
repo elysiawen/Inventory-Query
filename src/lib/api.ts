@@ -95,6 +95,8 @@ export const api = {
     form.append("file", file);
     return request(path, { method: "POST", body: form });
   },
+  uploadForm: async (path: string, form: FormData) =>
+    request(path, { method: "POST", body: form }),
 };
 
 /** 用当前 token 换取新 token，实现活跃续期；失败时静默，不打断当前操作 */

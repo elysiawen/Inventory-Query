@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Modal, Field, inputCls, Pagination, Loading, Spinner, ErrorState } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmProvider";
@@ -32,6 +32,75 @@ interface PageData {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+interface ImportDuplicate {
+  row: number;
+  category: string;
+  name: string;
+  model: string;
+  currentQuantity: number;
+  currentPrice: number;
+}
+
+interface ImportCompound {
+  row: number;
+  name: string;
+  model: string;
+  raw: string;
+  parsed: { innerDiameter: number; outerDiameter: number; height: number };
+  extraHeights: number[];
+  heights: number[];
+  quantities: number[];
+  labels: string[];
+}
+
+interface ImportPreviewRow {
+  row: number;
+  category: string;
+  name: string;
+  model: string;
+  price: number;
+  quantities: number[];
+  heights: number[];
+  labels: string[];
+  innerDiameter: number;
+  outerDiameter: number;
+  compound: boolean;
+  remark: string | null;
+}
+
+interface ImportReport {
+  total: number;
+  valid: number;
+  rows: ImportPreviewRow[];
+  duplicates: ImportDuplicate[];
+  compounds: ImportCompound[];
+  invalid: { row: number; reason: string }[];
+  newCategories: string[];
+}
+
+interface ImportOptions {
+  duplicates: "skip" | "update" | "create";
+  compound: "first" | "split" | "skip";
+  invalid: "abort" | "skip";
+}
+
+interface PlannedVariant {
+  /** 变体展示名：复合规格为「开（高 2）」，普通规格为「内径×外径×高」 */
+  title: string;
+  quantity: number | null;
+}
+
+interface PlannedItem {
+  row: number;
+  category: string;
+  name: string;
+  model: string;
+  price: number;
+  action: "create" | "update" | "skip";
+  skipReason?: string;
+  variants: PlannedVariant[];
 }
 
 const emptyForm = {
@@ -76,6 +145,21 @@ export default function ItemsPage() {
   const [stockQty, setStockQty] = useState("");
   const [stockRemark, setStockRemark] = useState("");
   const [stockSaving, setStockSaving] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [importParsing, setImportParsing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importOptions, setImportOptions] = useState<ImportOptions>({
+    duplicates: "skip",
+    compound: "first",
+    invalid: "abort",
+  });
+  const [splitQty, setSplitQty] = useState<Record<number, string[]>>({});
+  // 导入分两步：1 选择表格与处理策略，2 核对明细后提交
+  const [importStep, setImportStep] = useState<1 | 2>(1);
+  const importRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     // 请求序号：只应用最后一次请求的结果，避免慢网下旧响应覆盖新结果
@@ -250,16 +334,182 @@ export default function ItemsPage() {
     }
   }
 
+  function openImport() {
+    setImportOpen(true);
+    setImportStep(1);
+    setImportFile(null);
+    setImportReport(null);
+    setImportOptions({ duplicates: "skip", compound: "first", invalid: "abort" });
+    setSplitQty({});
+  }
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // 清空选择值，失败后可以重新选择同一个文件
+    e.target.value = "";
+    if (!file) return;
+    if (!/\.xlsx$/i.test(file.name)) {
+      toast.error("只支持 .xlsx 格式的表格");
+      return;
+    }
+    setImportParsing(true);
+    setImportStep(1);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("dryRun", "1");
+      const res = (await api.uploadForm("/api/items/import", form)) as { report: ImportReport };
+      setImportFile(file);
+      setImportReport(res.report);
+      // 表格里写了多个数量（如 20/10）时预填，否则留空由用户按变体填写
+      const nextSplit: Record<number, string[]> = {};
+      for (const c of res.report.compounds) {
+        nextSplit[c.row] =
+          c.quantities.length === c.heights.length ? c.quantities.map(String) : c.heights.map(() => "");
+      }
+      setSplitQty(nextSplit);
+    } catch (err) {
+      setImportFile(null);
+      setImportReport(null);
+      setSplitQty({});
+      toast.error((err as Error).message);
+    } finally {
+      setImportParsing(false);
+    }
+  }
+  async function handleImport() {
+    if (!importFile || !importReport || importing) return;
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append("file", importFile);
+      form.append("dryRun", "0");
+      const payload: ImportOptions & { quantities?: Record<string, number[]> } = {
+        ...importOptions,
+      };
+      if (importOptions.compound === "split") {
+        // 留空的行不提交，服务端会回落到表格里写的数量（如 20/10）或给出提示
+        const quantities: Record<string, number[]> = {};
+        for (const [row, values] of Object.entries(splitQty)) {
+          if (values.some((v) => v.trim() === "")) continue;
+          quantities[row] = values.map((v) => Number(v));
+        }
+        payload.quantities = quantities;
+      }
+      form.append("options", JSON.stringify(payload));
+      const res = (await api.uploadForm("/api/items/import", form)) as {
+        created: number;
+        updated: number;
+        skipped: number;
+        newCategories: string[];
+      };
+      toast.success(`导入完成：新增 ${res.created}，更新 ${res.updated}，跳过 ${res.skipped}`);
+      setImportOpen(false);
+      if (res.newCategories.length > 0) {
+        api
+          .get("/api/categories")
+          .then((list) => setCategories(list as CategoryOption[]))
+          .catch(() => undefined);
+      }
+      if (page !== 1) setPage(1);
+      else load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // 选择拆分时，必须为真正会写入的变体填好合法的库存数量才能导入；
+  // 重复项选择「跳过」时整行不会写入，无需填写数量
+  const skippedDuplicateRows = new Set(
+    importOptions.duplicates === "skip" ? (importReport?.duplicates ?? []).map((d) => d.row) : [],
+  );
+  const splitReady =
+    !importReport ||
+    importOptions.compound !== "split" ||
+    importReport.compounds
+      .filter((c) => !skippedDuplicateRows.has(c.row))
+      .every((c) => {
+        const values = splitQty[c.row] ?? [];
+        return (
+          values.length === c.heights.length &&
+          values.every((v) => /^\d+$/.test(v.trim()) && Number(v) <= 1_000_000_000)
+        );
+      });
+
+  // 本次导入明细：按当前选项与填写数量，列出真正会新增 / 更新 / 跳过的每条物品
+  const planned = useMemo<PlannedItem[]>(() => {
+    if (!importReport) return [];
+    const duplicateRows = new Set(importReport.duplicates.map((d) => d.row));
+    return (importReport.rows ?? []).map((r) => {
+      const base = {
+        row: r.row,
+        category: r.category,
+        name: r.name,
+        model: r.model,
+        price: r.price,
+      };
+      if (r.compound && importOptions.compound === "skip") {
+        return { ...base, action: "skip", skipReason: "复合规格，选择跳过", variants: [] };
+      }
+      const isDuplicate = duplicateRows.has(r.row);
+      if (isDuplicate && importOptions.duplicates === "skip") {
+        return { ...base, action: "skip", skipReason: "重复项，选择跳过", variants: [] };
+      }
+      const split = r.compound && importOptions.compound === "split";
+      const heights = split ? r.heights : [r.heights[0]];
+      const filled = splitQty[r.row] ?? [];
+      const variants: PlannedVariant[] = heights.map((height, index) => {
+        let quantity: number | null = null;
+        if (!split) {
+          quantity = r.quantities[0] ?? null;
+        } else if (filled.length === heights.length && /^\d+$/.test((filled[index] ?? "").trim())) {
+          quantity = Number(filled[index]);
+        } else if (r.quantities.length === heights.length) {
+          quantity = r.quantities[index];
+        }
+        return {
+          // 复合规格各变体只差高度，显示简称+高度；普通规格显示完整尺寸
+          title: r.compound
+            ? `${r.labels[index] ?? `第 ${index + 1} 组`}（高 ${height}）`
+            : `${r.innerDiameter}×${r.outerDiameter}×${height}`,
+          quantity,
+        };
+      });
+      return { ...base, action: isDuplicate ? "update" : "create", variants };
+    });
+  }, [importReport, importOptions.compound, importOptions.duplicates, splitQty]);
+
+  const planTotals = useMemo(() => {
+    let create = 0;
+    let update = 0;
+    let skip = 0;
+    for (const item of planned) {
+      if (item.action === "skip") skip += 1;
+      else if (item.action === "create") create += item.variants.length;
+      else update += item.variants.length;
+    }
+    return { create, update, skip };
+  }, [planned]);
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-800">物品管理</h2>
-        <button
-          onClick={openCreate}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          + 上架物品
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openImport}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            导入表格
+          </button>
+          <button
+            onClick={openCreate}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            + 上架物品
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -593,14 +843,16 @@ export default function ItemsPage() {
           <div className="sm:col-span-2">
             <span className="mb-1 block text-sm font-medium text-slate-700">
               尺寸 (mm)
-              <span className="ml-1 text-xs font-normal text-slate-400">内径 × 外径 × 高度</span>
+              <span className="ml-1 text-xs font-normal text-slate-400">
+                内径/柄径 × 外径 × 高度/总长
+              </span>
             </span>
             <div className="flex items-center overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-blue-500">
               <input
                 className="min-w-0 flex-1 px-3 py-2 text-center text-sm focus:outline-none"
                 type="number"
                 step="0.01"
-                placeholder="内径"
+                placeholder="内径/柄径"
                 value={form.innerDiameter}
                 onChange={(e) => setForm({ ...form, innerDiameter: e.target.value })}
               />
@@ -618,7 +870,7 @@ export default function ItemsPage() {
                 className="min-w-0 flex-1 px-3 py-2 text-center text-sm focus:outline-none"
                 type="number"
                 step="0.01"
-                placeholder="高度"
+                placeholder="高度/总长"
                 value={form.height}
                 onChange={(e) => setForm({ ...form, height: e.target.value })}
               />
@@ -775,6 +1027,534 @@ export default function ItemsPage() {
           </Field>
         </div>
       </Modal>
+
+      {/* 批量导入 */}
+      <Modal
+        open={importOpen}
+        onClose={() => {
+          if (!importing) setImportOpen(false);
+        }}
+        title={importStep === 1 ? "从 Excel 导入物品" : "核对导入明细"}
+        width="max-w-2xl"
+        footer={
+          importStep === 1 ? (
+            <>
+              <button
+                onClick={() => setImportOpen(false)}
+                disabled={importing}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => setImportStep(2)}
+                disabled={
+                  !importReport ||
+                  importReport.valid === 0 ||
+                  importParsing ||
+                  !splitReady ||
+                  (importOptions.invalid === "abort" && (importReport?.invalid.length ?? 0) > 0)
+                }
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                下一步
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setImportStep(1)}
+                disabled={importing}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                上一步
+              </button>
+              <button
+                onClick={() => void handleImport()}
+                disabled={importing || !splitReady}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {importing ? "导入中…" : "确认导入"}
+              </button>
+            </>
+          )
+        }
+      >
+        <input
+          ref={importRef}
+          type="file"
+          accept=".xlsx"
+          className="hidden"
+          onChange={(e) => void handleImportFile(e)}
+        />
+        <div className="space-y-4 text-sm">
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 font-medium ${
+                importStep === 1 ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700"
+              }`}
+            >
+              <span
+                className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                  importStep === 1 ? "bg-white/25" : "bg-blue-100"
+                }`}
+              >
+                1
+              </span>
+              选择表格与策略
+            </span>
+            <span className="h-px flex-1 bg-slate-200" />
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 font-medium ${
+                importStep === 2 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              <span
+                className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                  importStep === 2 ? "bg-white/25" : "bg-white"
+                }`}
+              >
+                2
+              </span>
+              核对明细
+            </span>
+          </div>
+
+          {importStep === 1 && (
+            <p className="text-xs text-slate-500">
+              表格需包含列：类目、存货全名、规格（内径/柄径*外径*高度/总长）、型号、最低售价、库存数量、备注。仅支持 .xlsx，最大 5MB。
+            </p>
+          )}
+
+          {importStep === 1 && importParsing && (
+            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-3 text-slate-500">
+              <Spinner className="h-4 w-4" />
+              正在解析表格…
+            </div>
+          )}
+
+          {importStep === 1 && !importParsing && !importReport && (
+            <button
+              onClick={() => importRef.current?.click()}
+              className="group flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 px-4 py-10 text-slate-500 transition hover:border-blue-400 hover:bg-blue-50/40 hover:text-blue-600"
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl leading-none shadow-sm ring-1 ring-slate-200 transition group-hover:ring-blue-200">
+                ＋
+              </span>
+              <span className="text-sm font-medium">点击选择要导入的 .xlsx 文件</span>
+              <span className="text-[11px] text-slate-400">
+                请保持表头与模板一致，第一行不要留空
+              </span>
+            </button>
+          )}
+
+          {importReport && !importParsing && (
+            <>
+              {importStep === 1 && (
+                <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                  <p className="text-[11px] text-slate-500">表格总行数</p>
+                  <p className="mt-0.5 text-lg font-semibold leading-tight text-slate-800">
+                    {importReport.total}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2">
+                  <p className="text-[11px] text-blue-500">可导入</p>
+                  <p className="mt-0.5 text-lg font-semibold leading-tight text-blue-700">
+                    {importReport.valid}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2">
+                  <p className="text-[11px] text-amber-600">重复项</p>
+                  <p className="mt-0.5 text-lg font-semibold leading-tight text-amber-700">
+                    {importReport.duplicates.length}
+                  </p>
+                </div>
+                <div
+                  className={`rounded-xl border px-3 py-2 ${
+                    importReport.invalid.length > 0
+                      ? "border-red-100 bg-red-50/60"
+                      : "border-slate-200 bg-slate-50/70"
+                  }`}
+                >
+                  <p
+                    className={`text-[11px] ${
+                      importReport.invalid.length > 0 ? "text-red-500" : "text-slate-500"
+                    }`}
+                  >
+                    不合法
+                  </p>
+                  <p
+                    className={`mt-0.5 text-lg font-semibold leading-tight ${
+                      importReport.invalid.length > 0 ? "text-red-600" : "text-slate-800"
+                    }`}
+                  >
+                    {importReport.invalid.length}
+                  </p>
+                </div>
+              </div>
+
+              {importReport.newCategories.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  将自动创建类目：{importReport.newCategories.join("、")}
+                </p>
+              )}
+
+              {importReport.invalid.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-red-200">
+                  <div className="flex items-center gap-2 bg-red-50 px-3 py-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <p className="text-xs font-medium text-red-700">
+                      不合法行 · {importReport.invalid.length} 行
+                    </p>
+                  </div>
+                  <div className="space-y-1 px-3 py-2 text-xs text-slate-500">
+                    {importReport.invalid.map((r) => (
+                      <div key={r.row}>
+                        第 {r.row} 行：{r.reason}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2 border-t border-red-100 bg-white px-3 py-2.5">
+                    <ImportOption
+                      name="invalid"
+                      value="abort"
+                      checked={importOptions.invalid === "abort"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, invalid: v }))}
+                    >
+                      全部回滚：修正表格后再导入
+                    </ImportOption>
+                    <ImportOption
+                      name="invalid"
+                      value="skip"
+                      checked={importOptions.invalid === "skip"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, invalid: v }))}
+                    >
+                      跳过错误行：只导入合法数据
+                    </ImportOption>
+                  </div>
+                </div>
+              )}
+
+              {importReport.duplicates.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-amber-200">
+                  <div className="flex items-center gap-2 bg-amber-50 px-3 py-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <p className="text-xs font-medium text-amber-700">
+                      已存在的物品 · {importReport.duplicates.length} 行
+                    </p>
+                  </div>
+                  <div className="space-y-1 px-3 py-2 text-xs text-slate-500">
+                    {importReport.duplicates.map((d) => (
+                      <div key={d.row}>
+                        第 {d.row} 行：{d.category} / {d.name} / {d.model}（当前库存{" "}
+                        {d.currentQuantity}，单价 ¥{d.currentPrice}）
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2 border-t border-amber-100 bg-white px-3 py-2.5">
+                    <ImportOption
+                      name="duplicates"
+                      value="skip"
+                      checked={importOptions.duplicates === "skip"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, duplicates: v }))}
+                    >
+                      跳过重复项（推荐）
+                    </ImportOption>
+                    <ImportOption
+                      name="duplicates"
+                      value="update"
+                      checked={importOptions.duplicates === "update"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, duplicates: v }))}
+                    >
+                      用表格中的库存和售价覆盖已有记录
+                    </ImportOption>
+                    <ImportOption
+                      name="duplicates"
+                      value="create"
+                      checked={importOptions.duplicates === "create"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, duplicates: v }))}
+                    >
+                      仍然新增一条
+                    </ImportOption>
+                  </div>
+                </div>
+              )}
+
+              {importReport.compounds.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-amber-200">
+                  <div className="flex items-center gap-2 bg-amber-50 px-3 py-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <p className="text-xs font-medium text-amber-700">
+                      复合规格行 · {importReport.compounds.length} 行
+                    </p>
+                  </div>
+                  <div className="space-y-1.5 px-3 py-2 text-xs text-slate-500">
+                    {importReport.compounds.map((c) => (
+                      <div key={c.row} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-slate-400">第 {c.row} 行</span>
+                        <span className="font-medium text-slate-600">{c.model}</span>
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                          {c.raw}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          内径 {c.parsed.innerDiameter} · 外径 {c.parsed.outerDiameter} · 高{" "}
+                          {c.parsed.height}
+                          {c.extraHeights.length > 0 && ` · 另有高度 ${c.extraHeights.join("、")}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-2 border-t border-amber-100 bg-white px-3 py-2.5">
+                    <ImportOption
+                      name="compound"
+                      value="first"
+                      checked={importOptions.compound === "first"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, compound: v }))}
+                    >
+                      取第一组尺寸，原始规格写入备注（推荐）
+                    </ImportOption>
+                    <ImportOption
+                      name="compound"
+                      value="split"
+                      checked={importOptions.compound === "split"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, compound: v }))}
+                    >
+                      按每组尺寸拆成多条物品
+                    </ImportOption>
+                    <ImportOption
+                      name="compound"
+                      value="skip"
+                      checked={importOptions.compound === "skip"}
+                      onChange={(v) => setImportOptions((prev) => ({ ...prev, compound: v }))}
+                    >
+                      跳过这些行
+                    </ImportOption>
+                  </div>
+
+                  {importOptions.compound === "split" && (
+                    <div className="border-t border-amber-100 bg-amber-50/40 px-3 py-3">
+                      <p className="text-xs text-amber-700">
+                        拆分后每个变体单独设置库存数量（表格数量列写成 20/10 会自动带入）：
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {importReport.compounds.map((c) => (
+                          <div
+                            key={c.row}
+                            className="rounded-lg border border-amber-100 bg-white px-2.5 py-2"
+                          >
+                            <p className="text-[11px] font-medium text-slate-600">
+                              第 {c.row} 行 {c.model}
+                            </p>
+                            <div className="mt-1.5 grid grid-cols-2 gap-2">
+                              {c.heights.map((height, index) => (
+                                <label
+                                  key={`${c.row}-${index}`}
+                                  className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2 py-1"
+                                >
+                                  <span className="text-[11px] text-slate-500">
+                                    {c.labels[index] ?? `第 ${index + 1} 组`}（高 {height}）
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    value={splitQty[c.row]?.[index] ?? ""}
+                                    onChange={(e) => {
+                                      const next = [
+                                        ...(splitQty[c.row] ?? c.heights.map(() => "")),
+                                      ];
+                                      next[index] = e.target.value;
+                                      setSplitQty((prev) => ({ ...prev, [c.row]: next }));
+                                    }}
+                                    placeholder="数量"
+                                    className="w-16 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {!splitReady && (
+                        <p className="mt-2 text-xs text-red-600">请为每个变体填写 0 或更大的整数数量</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {importReport.valid === 0 && (
+                <p className="text-xs text-red-600">没有可导入的数据，请检查表格内容。</p>
+              )}
+                </>
+              )}
+
+              {importStep === 2 && (
+                <>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                      <p className="text-[11px] text-slate-500">明细行数</p>
+                      <p className="mt-0.5 text-lg font-semibold leading-tight text-slate-800">
+                        {planned.length}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                      <p className="text-[11px] text-emerald-600">新增</p>
+                      <p className="mt-0.5 text-lg font-semibold leading-tight text-emerald-700">
+                        {planTotals.create}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2">
+                      <p className="text-[11px] text-blue-500">更新</p>
+                      <p className="mt-0.5 text-lg font-semibold leading-tight text-blue-700">
+                        {planTotals.update}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                      <p className="text-[11px] text-slate-500">跳过</p>
+                      <p className="mt-0.5 text-lg font-semibold leading-tight text-slate-600">
+                        {planTotals.skip}
+                      </p>
+                    </div>
+                  </div>
+                  {importReport.newCategories.length > 0 && (
+                    <p className="text-xs text-slate-500">
+                      将自动创建类目：{importReport.newCategories.join("、")}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    请核对以下物品与数量，确认无误后点击「确认导入」。
+                  </p>
+
+              {planned.length > 0 && (
+                <div className="rounded-lg border border-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-200 px-3 py-2">
+                    <p className="font-medium text-slate-700">物品明细</p>
+                    <p className="text-xs text-slate-400">按行号排列</p>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {planned.map((item) => (
+                      <div
+                        key={item.row}
+                        className="flex items-start gap-3 px-3 py-2.5 text-xs transition hover:bg-slate-50"
+                      >
+                        <div className="flex w-24 shrink-0 flex-col">
+                          <p className="flex h-5 items-center text-[11px] tabular-nums text-slate-400">
+                            第 {item.row} 行
+                          </p>
+                          <span className="mt-1 flex h-5 w-fit items-center rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">
+                            {item.category}
+                          </span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-medium text-slate-800">{item.name}</span>
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                              {item.model}
+                            </span>
+                            <span className="text-[11px] text-slate-400">¥{item.price}</span>
+                          </div>
+                          {item.action === "skip" ? (
+                            <p className="mt-1 text-[11px] text-slate-400">{item.skipReason}</p>
+                          ) : (
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-600">
+                              {item.variants.map((v, index) => (
+                                <span key={index} className="rounded-md bg-slate-50 px-1.5 py-0.5">
+                                  {v.title}
+                                </span>
+                              ))}
+                              {item.action === "update" && (
+                                <span className="text-[11px] text-blue-600">库存数量将被覆盖</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              item.action === "create"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : item.action === "update"
+                                  ? "bg-blue-50 text-blue-700"
+                                  : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {item.action === "create"
+                              ? "新增"
+                              : item.action === "update"
+                                ? "更新"
+                                : "跳过"}
+                          </span>
+                          {item.action !== "skip" && (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                                item.variants.some((v) => v.quantity === null)
+                                  ? "bg-red-50 text-red-600"
+                                  : "bg-slate-100 text-slate-700"
+                              }`}
+                            >
+                              {item.variants.some((v) => v.quantity === null)
+                                ? "待填写"
+                                : item.variants.map((v) => v.quantity).join(" / ")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+                </>
+              )}
+
+              {importStep === 1 && (
+                <button
+                  onClick={() => importRef.current?.click()}
+                  disabled={importParsing || importing}
+                  className="w-full rounded-lg border border-dashed border-slate-300 py-2 text-xs text-slate-500 transition hover:border-blue-300 hover:text-blue-600 disabled:opacity-50"
+                >
+                  重新选择表格
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
+  );
+}
+
+function ImportOption<T extends string>({
+  name,
+  value,
+  checked,
+  onChange,
+  children,
+}: {
+  name: string;
+  value: T;
+  checked: boolean;
+  onChange: (value: T) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+        checked
+          ? "border-blue-400 bg-blue-50/70 text-blue-800"
+          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+      }`}
+    >
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        onChange={() => onChange(value)}
+        className="mt-0.5 accent-blue-600"
+      />
+      <span>{children}</span>
+    </label>
   );
 }

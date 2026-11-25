@@ -28,11 +28,9 @@ export function Modal({
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fade-in"
-      onClick={onClose}
     >
       <div
         className={`flex w-full ${width} max-h-[90vh] flex-col overflow-hidden rounded-xl bg-white shadow-2xl animate-zoom-in`}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>

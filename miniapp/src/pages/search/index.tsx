@@ -18,9 +18,9 @@ const SORT_OPTIONS = [
   { key: 'name', label: '名称' },
   { key: 'price', label: '单价' },
   { key: 'quantity', label: '库存' },
-  { key: 'innerDiameter', label: '内径' },
+  { key: 'innerDiameter', label: '内径/柄径' },
   { key: 'outerDiameter', label: '外径' },
-  { key: 'height', label: '高度' }
+  { key: 'height', label: '高度/总长' }
 ]
 
 type DimKey = 'inner' | 'outer' | 'height'
@@ -36,9 +36,9 @@ interface DimValue {
 type DimState = Record<DimKey, DimValue>
 
 const DIM_FIELDS: { key: DimKey; label: string }[] = [
-  { key: 'inner', label: '内径' },
+  { key: 'inner', label: '内径/柄径' },
   { key: 'outer', label: '外径' },
-  { key: 'height', label: '高度' }
+  { key: 'height', label: '高度/总长' }
 ]
 
 function emptyDims(): DimState {

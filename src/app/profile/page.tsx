@@ -25,6 +25,7 @@ export default function ProfilePage() {
   const [savingUsername, setSavingUsername] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [removingAvatar, setRemovingAvatar] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,6 +62,19 @@ export default function ProfilePage() {
       toast.error((err as Error).message);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setRemovingAvatar(true);
+    try {
+      const latest = (await api.delete("/api/auth/avatar")) as AuthUser;
+      applyUser(latest);
+      toast.success("头像已删除");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setRemovingAvatar(false);
     }
   }
 
@@ -162,14 +176,26 @@ export default function ProfilePage() {
                   {user?.role === "ADMIN" ? "管理员" : "普通用户"}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
-              >
-                {uploading ? "上传中…" : "更换头像"}
-              </button>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading || removingAvatar}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {uploading ? "上传中…" : "更换头像"}
+                </button>
+                {user?.avatar && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveAvatar()}
+                    disabled={uploading || removingAvatar}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {removingAvatar ? "删除中…" : "删除头像"}
+                  </button>
+                )}
+              </div>
               <input
                 ref={fileRef}
                 type="file"

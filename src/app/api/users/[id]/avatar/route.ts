@@ -59,3 +59,29 @@ export async function POST(
     return NextResponse.json({ error: "头像更新失败，请稍后重试" }, { status: 400 });
   }
 }
+
+/** DELETE 管理员移除指定账号的头像 */
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+  const guard = await requireAdmin(req);
+  if (guard.response) return guard.response;
+
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, avatar: true },
+  });
+  if (!target) {
+    return NextResponse.json({ error: "账号不存在" }, { status: 404 });
+  }
+
+  const user = await prisma.user.update({
+    where: { id },
+    data: { avatar: null },
+    select: userSelect,
+  });
+  await removeUploadedFile(target.avatar);
+  return NextResponse.json(user);
+}

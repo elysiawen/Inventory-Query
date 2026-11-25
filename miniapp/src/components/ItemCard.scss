@@ -68,17 +68,36 @@
 
 .item-card__dims {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
+  align-items: stretch;
   margin-top: 20rpx;
+  padding: 12rpx 0;
+  border-radius: 16rpx;
+  background: #f8fafc;
 }
 
 .item-card__dim {
-  padding: 8rpx 16rpx;
-  border-radius: 10rpx;
-  background: #f8fafc;
-  color: #475569;
-  font-size: 22rpx;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  border-left: 2rpx solid #e2e8f0;
+}
+
+.item-card__dim:first-child {
+  border-left: none;
+}
+
+.item-card__dim-label {
+  font-size: 20rpx;
+  color: #94a3b8;
+}
+
+.item-card__dim-value {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #334155;
 }
 
 .item-card__remark {
