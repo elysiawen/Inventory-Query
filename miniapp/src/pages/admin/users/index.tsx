@@ -27,6 +27,7 @@ export default function AdminUsersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<UserRow | null>(null)
   const [username, setUsername] = useState('')
+  const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'USER' | 'ADMIN'>('USER')
   const [active, setActive] = useState(true)
@@ -60,6 +61,7 @@ export default function AdminUsersPage() {
   function openCreate() {
     setEditing(null)
     setUsername('')
+    setNickname('')
     setPassword('')
     setRole('USER')
     setActive(true)
@@ -69,6 +71,7 @@ export default function AdminUsersPage() {
   function openEdit(user: UserRow) {
     setEditing(user)
     setUsername(user.username)
+    setNickname(user.nickname ?? '')
     setPassword('')
     setRole(user.role)
     setActive(user.active)
@@ -84,15 +87,17 @@ export default function AdminUsersPage() {
     if (password && (password.length < 6 || password.length > 72)) {
       return toast('密码长度需为 6-72 位')
     }
+    if (nickname.trim().length > 30) return toast('昵称最多 30 个字符')
     setSaving(true)
     try {
       if (editing) {
         const payload: {
           username: string
+          nickname: string
           password?: string
           role?: 'USER' | 'ADMIN'
           active?: boolean
-        } = { username: name }
+        } = { username: name, nickname: nickname.trim() }
         if (password) payload.password = password
         if (!isSelf(editing)) {
           payload.role = role
@@ -104,13 +109,14 @@ export default function AdminUsersPage() {
           setStoredUser({
             id: updated.id,
             username: updated.username,
+            nickname: updated.nickname ?? null,
             role: updated.role,
             avatar: updated.avatar
           })
         }
         toast('已保存')
       } else {
-        await createUser({ username: name, password, role })
+        await createUser({ username: name, nickname: nickname.trim(), password, role })
         toast('账号已创建')
       }
       setModalOpen(false)
@@ -151,6 +157,7 @@ export default function AdminUsersPage() {
         setStoredUser({
           id: updated.id,
           username: updated.username,
+          nickname: updated.nickname ?? null,
           role: updated.role,
           avatar: updated.avatar
         })
@@ -205,7 +212,10 @@ export default function AdminUsersPage() {
         <View className="card user-card" key={user.id}>
           <View className="row-between">
             <View className="user-card__title">
-              <Text className="user-card__name">{user.username}</Text>
+              <Text className="user-card__name">{user.nickname?.trim() || user.username}</Text>
+              {user.nickname ? (
+                <Text className="user-card__self">@{user.username}</Text>
+              ) : null}
               {isSelf(user) ? <Text className="user-card__self">（当前账号）</Text> : null}
             </View>
             <View className={`tag ${user.role === 'ADMIN' ? 'tag--admin' : 'tag--user'}`}>
@@ -263,6 +273,16 @@ export default function AdminUsersPage() {
             value={username}
             placeholder="1-50 个非空白字符"
             onInput={(e) => setUsername(e.detail.value)}
+          />
+        </View>
+        <View className="field">
+          <Text className="field__label">昵称</Text>
+          <Input
+            className="input"
+            value={nickname}
+            maxlength={30}
+            placeholder="选填，留空则显示账号"
+            onInput={(e) => setNickname(e.detail.value)}
           />
         </View>
 

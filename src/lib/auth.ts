@@ -12,6 +12,7 @@ export function getTokenPayload(req: NextRequest): JwtPayload | null {
 
 export interface AuthUserInfo extends JwtPayload {
   avatar: string | null;
+  nickname: string | null;
 }
 
 interface GuardResult {
@@ -34,7 +35,7 @@ export async function requireAuth(req: NextRequest): Promise<GuardResult> {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.id },
-    select: { id: true, username: true, role: true, active: true, avatar: true },
+    select: { id: true, username: true, nickname: true, role: true, active: true, avatar: true },
   });
   if (!user || !user.active) {
     return {
@@ -44,7 +45,13 @@ export async function requireAuth(req: NextRequest): Promise<GuardResult> {
   }
 
   return {
-    user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar },
+    user: {
+      id: user.id,
+      username: user.username,
+      nickname: user.nickname,
+      role: user.role,
+      avatar: user.avatar,
+    },
     response: null,
   };
 }

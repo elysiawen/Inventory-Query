@@ -3,6 +3,7 @@ export type Role = 'ADMIN' | 'USER'
 export interface AuthUser {
   id: string
   username: string
+  nickname?: string | null
   role: Role
   avatar?: string | null
 }
@@ -38,6 +39,7 @@ export interface ItemRow {
 export interface UserRow {
   id: string
   username: string
+  nickname?: string | null
   role: Role
   active: boolean
   avatar?: string | null

@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, getStoredUser, getToken, logout, refreshStoredUser } from "@/lib/api";
+import { api, displayNameOf, getStoredUser, getToken, logout, refreshStoredUser } from "@/lib/api";
 import { Pagination, inputCls, Loading } from "@/components/ui";
 import { useToast } from "@/components/ToastProvider";
 
@@ -101,6 +101,11 @@ export default function SearchPage() {
     const u = getStoredUser();
     if (!getToken() || !u) {
       router.replace("/login");
+      return;
+    }
+    // 管理员默认进后台；带 mode=search 表示从后台主动来前台查询，需留在前台
+    if (u.role === "ADMIN" && !new URLSearchParams(window.location.search).has("mode")) {
+      router.replace("/admin/items");
       return;
     }
     setUser(u);
@@ -238,7 +243,8 @@ export default function SearchPage() {
     router.replace("/login");
   }
 
-  const avatarLetter = user?.username ? user.username.charAt(0).toUpperCase() : "?";
+  const displayName = displayNameOf(user);
+  const avatarLetter = displayName ? displayName.charAt(0).toUpperCase() : "?";
 
   // 已填写的尺寸条件数量，收起时也能一眼看出有没有生效
   const advancedCount = DIMS.filter((d) => {
@@ -340,7 +346,7 @@ export default function SearchPage() {
                   avatarLetter
                 )}
               </span>
-              <span>{user?.username}</span>
+              <span className="max-w-[120px] truncate sm:max-w-[200px]">{displayName}</span>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><polyline points="6 9 12 15 18 9" /></svg>
             </button>
             <div

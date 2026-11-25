@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/password";
 const userSelect = {
   id: true,
   username: true,
+  nickname: true,
   role: true,
   active: true,
   avatar: true,
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   const guard = await requireAdmin(req);
   if (guard.response) return guard.response;
 
-  let body: { username?: string; password?: string; role?: string };
+  let body: { username?: string; password?: string; role?: string; nickname?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -37,8 +38,12 @@ export async function POST(req: NextRequest) {
   const username = String(body.username ?? "").trim();
   const password = String(body.password ?? "");
   const role = body.role;
+  const nickname = body.nickname === undefined ? null : String(body.nickname).trim() || null;
   if (!username || !password) {
     return NextResponse.json({ error: "账号和密码必填" }, { status: 400 });
+  }
+  if (nickname && nickname.length > 30) {
+    return NextResponse.json({ error: "昵称最多 30 个字符" }, { status: 400 });
   }
   if (!/^\S{1,50}$/.test(username)) {
     return NextResponse.json({ error: "账号需为 1-50 个非空白字符" }, { status: 400 });
@@ -58,6 +63,7 @@ export async function POST(req: NextRequest) {
       data: {
         username,
         passwordHash,
+        nickname,
         role: role === "ADMIN" ? "ADMIN" : "USER",
       },
       select: userSelect,

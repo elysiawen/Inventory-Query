@@ -119,6 +119,12 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     token,
-    user: { id: user.id, username: user.username, role: user.role, avatar: user.avatar },
+    user: {
+      id: user.id,
+      username: user.username,
+      nickname: user.nickname,
+      role: user.role,
+      avatar: user.avatar,
+    },
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, getStoredUser, refreshStoredUser } from "@/lib/api";
+import { api, displayNameOf, getStoredUser, refreshStoredUser } from "@/lib/api";
 import { Modal, Field, inputCls, Loading, ErrorState } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -9,6 +9,7 @@ import { useToast } from "@/components/ToastProvider";
 interface UserRow {
   id: string;
   username: string;
+  nickname?: string | null;
   role: "ADMIN" | "USER";
   active: boolean;
   avatar?: string | null;
@@ -23,7 +24,7 @@ export default function UsersPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
-  const [form, setForm] = useState({ username: "", password: "", role: "USER" });
+  const [form, setForm] = useState({ username: "", nickname: "", password: "", role: "USER" });
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -52,13 +53,13 @@ export default function UsersPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ username: "", password: "", role: "USER" });
+    setForm({ username: "", nickname: "", password: "", role: "USER" });
     setActive(true);
     setModalOpen(true);
   }
   function openEdit(u: UserRow) {
     setEditing(u);
-    setForm({ username: u.username, password: "", role: u.role });
+    setForm({ username: u.username, nickname: u.nickname ?? "", password: "", role: u.role });
     setActive(u.active);
     setModalOpen(true);
   }
@@ -76,6 +77,10 @@ export default function UsersPage() {
       toast.error("密码长度需为 6-72 位");
       return;
     }
+    if (form.nickname.trim().length > 30) {
+      toast.error("昵称最多 30 个字符");
+      return;
+    }
     if (!editing && !form.password) {
       toast.error("创建账号时密码必填");
       return;
@@ -83,7 +88,7 @@ export default function UsersPage() {
     setSaving(true);
     try {
       if (editing) {
-        const payload: Record<string, unknown> = { username };
+        const payload: Record<string, unknown> = { username, nickname: form.nickname.trim() };
         if (form.password) payload.password = form.password;
         // 服务端不允许修改自己的角色与启用状态，这里不提交对应字段
         if (!isSelf) {
@@ -192,7 +197,14 @@ export default function UsersPage() {
               list.map((u) => (
                 <div key={u.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium text-slate-800">{u.username}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-slate-800">
+                        {displayNameOf(u)}
+                      </div>
+                      {u.nickname ? (
+                        <div className="truncate text-xs text-slate-400">@{u.username}</div>
+                      ) : null}
+                    </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
                         u.role === "ADMIN"
@@ -256,7 +268,12 @@ export default function UsersPage() {
               ) : (
                 list.map((u) => (
                 <tr key={u.id} className="border-t border-slate-100">
-                  <td className="px-4 py-3 font-medium text-slate-700">{u.username}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-700">{displayNameOf(u)}</div>
+                    {u.nickname ? (
+                      <div className="text-xs text-slate-400">@{u.username}</div>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
@@ -376,6 +393,15 @@ export default function UsersPage() {
               className={inputCls}
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
+            />
+          </Field>
+          <Field label="昵称">
+            <input
+              className={inputCls}
+              value={form.nickname}
+              maxLength={30}
+              placeholder="选填，留空则显示账号"
+              onChange={(e) => setForm({ ...form, nickname: e.target.value })}
             />
           </Field>
           <Field label={editing ? "新密码（留空不修改）" : "密码"} required={!editing}>

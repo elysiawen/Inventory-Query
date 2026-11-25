@@ -22,6 +22,8 @@ export default function AdminCategoriesPage() {
   const [editing, setEditing] = useState<CategoryRow | null>(null)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  // 正在删除的分类 id：防止重复点击导致第二次请求 404
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isAdmin()) {
@@ -83,6 +85,7 @@ export default function AdminCategoriesPage() {
   }
 
   async function confirmDelete(category: CategoryRow) {
+    if (deletingId) return
     const res = await Taro.showModal({
       title: '删除分类',
       content: `确认删除「${category.name}」？分类下还有物品时无法删除。`,
@@ -90,12 +93,15 @@ export default function AdminCategoriesPage() {
       confirmColor: '#dc2626'
     })
     if (!res.confirm) return
+    setDeletingId(category.id)
     try {
       await deleteCategory(category.id)
       toast('已删除')
       reload()
     } catch (e) {
       toast(errorMessage(e))
+    } finally {
+      setDeletingId(null)
     }
   }
 

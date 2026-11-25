@@ -2,7 +2,7 @@ import { Input, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { useEffect, useState } from 'react'
 import { login } from '../../services/api'
-import { getStoredUser, getToken, setStoredUser, setToken } from '../../services/storage'
+import { getToken, setStoredUser, setToken } from '../../services/storage'
 import { errorMessage } from '../../utils/format'
 import './index.scss'
 
@@ -10,12 +10,15 @@ export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  // 入口页就是登录页：本地有 token 就先盖遮罩并跳转，避免闪出登录界面；
+  // token 真失效时由后续请求 401 清认证后回到这里显示表单
+  const [booting] = useState(() => Boolean(getToken()))
 
   useEffect(() => {
-    if (getToken() && getStoredUser()) {
+    if (booting) {
       Taro.reLaunch({ url: '/pages/search/index' })
     }
-  }, [])
+  }, [booting])
 
   async function submit() {
     if (loading) return
@@ -34,6 +37,16 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // 已登录：用全屏加载遮罩盖住，直到 reLaunch 完成，避免闪出登录界面
+  if (booting) {
+    return (
+      <View className="login-boot">
+        <View className="login-boot__spinner" />
+        <Text className="login-boot__text">正在进入系统…</Text>
+      </View>
+    )
   }
 
   return (

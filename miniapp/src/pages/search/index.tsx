@@ -123,6 +123,8 @@ export default function SearchPage() {
   function applySearch() {
     setPage(1)
     setAppliedKeyword(keyword.trim())
+    // 条件没变时也要重新查询，避免点「搜索」没反应
+    setReloadKey((k) => k + 1)
   }
 
   function applyDims() {

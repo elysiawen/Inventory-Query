@@ -26,9 +26,13 @@ export const fetchMe = () => request<AuthUser>('/api/auth/me')
 /** 删除自己的头像 */
 export const removeAvatar = () => request<AuthUser>('/api/auth/avatar', { method: 'DELETE' })
 
-/** 修改自己的用户名 / 密码（改密码需带原密码） */
-export const updateProfile = (data: { username?: string; password?: string; oldPassword?: string }) =>
-  request<AuthUser>('/api/auth/profile', { method: 'PUT', data })
+/** 修改自己的昵称 / 用户名 / 密码（改密码需带原密码） */
+export const updateProfile = (data: {
+  nickname?: string
+  username?: string
+  password?: string
+  oldPassword?: string
+}) => request<AuthUser>('/api/auth/profile', { method: 'PUT', data })
 
 export interface ItemSearchParams {
   keyword?: string
@@ -92,12 +96,22 @@ export const deleteCategory = (id: string) =>
 
 export const fetchUsers = () => request<UserRow[]>('/api/users')
 
-export const createUser = (payload: { username: string; password: string; role: 'ADMIN' | 'USER' }) =>
-  request<UserRow>('/api/users', { method: 'POST', data: payload })
+export const createUser = (payload: {
+  username: string
+  nickname?: string
+  password: string
+  role: 'ADMIN' | 'USER'
+}) => request<UserRow>('/api/users', { method: 'POST', data: payload })
 
 export const updateUser = (
   id: string,
-  payload: { username?: string; password?: string; role?: 'ADMIN' | 'USER'; active?: boolean }
+  payload: {
+    username?: string
+    nickname?: string
+    password?: string
+    role?: 'ADMIN' | 'USER'
+    active?: boolean
+  }
 ) => request<UserRow>(`/api/users/${id}`, { method: 'PUT', data: payload })
 
 export const deleteUser = (id: string) =>

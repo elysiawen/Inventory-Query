@@ -13,14 +13,24 @@ export default function ProfilePage() {
   const [user, setUser] = useState<AuthUser | null>(getStoredUser())
   const [refreshing, setRefreshing] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
-  const [usernameInput, setUsernameInput] = useState('')
-  const [usernameBusy, setUsernameBusy] = useState(false)
+  const [nicknameInput, setNicknameInput] = useState('')
+  const [nicknameBusy, setNicknameBusy] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [oldPasswordInput, setOldPasswordInput] = useState('')
   const [passwordBusy, setPasswordBusy] = useState(false)
 
   useEffect(() => {
-    if (!getToken()) Taro.reLaunch({ url: '/pages/login/index' })
+    if (!getToken()) {
+      Taro.reLaunch({ url: '/pages/login/index' })
+      return
+    }
+    // 有 token 但本地用户缓存丢失（被清理等）时补拉一次，避免页面停在「未登录」；
+    // token 已失效会由请求层统一清理并跳转登录页
+    if (!getStoredUser()) {
+      fetchMe()
+        .then(applyUser)
+        .catch(() => {})
+    }
   }, [])
 
   function applyUser(latest: AuthUser) {
@@ -94,31 +104,24 @@ export default function ProfilePage() {
     }
   }
 
-  async function saveUsername() {
-    if (usernameBusy) return
-    const name = usernameInput.trim()
-    if (!name) {
-      Taro.showToast({ title: '请输入新的用户名', icon: 'none' })
+  async function saveNickname() {
+    if (nicknameBusy) return
+    const name = nicknameInput.trim()
+    if (name === (user?.nickname ?? '')) {
+      Taro.showToast({ title: '昵称没有变化', icon: 'none' })
       return
     }
-    if (!/^\S{1,50}$/.test(name)) {
-      Taro.showToast({ title: '用户名需为 1-50 个非空白字符', icon: 'none' })
-      return
-    }
-    if (name === user?.username) {
-      Taro.showToast({ title: '用户名没有变化', icon: 'none' })
-      return
-    }
-    setUsernameBusy(true)
+    setNicknameBusy(true)
     try {
-      const latest = await updateProfile({ username: name })
+      // 空字符串表示清除昵称，界面回退显示账号
+      const latest = await updateProfile({ nickname: name })
       applyUser(latest)
-      setUsernameInput('')
-      Taro.showToast({ title: '用户名已更新', icon: 'success' })
+      setNicknameInput('')
+      Taro.showToast({ title: name ? '昵称已更新' : '昵称已清除', icon: 'success' })
     } catch (e) {
       Taro.showToast({ title: errorMessage(e), icon: 'none' })
     } finally {
-      setUsernameBusy(false)
+      setNicknameBusy(false)
     }
   }
 
@@ -158,6 +161,7 @@ export default function ProfilePage() {
   }
 
   const isAdmin = user?.role === 'ADMIN'
+  const displayName = user?.nickname?.trim() || user?.username || '未登录'
 
   return (
     <View className="page">
@@ -171,7 +175,7 @@ export default function ProfilePage() {
             />
           ) : (
             <Text className="profile-card__avatar-text">
-              {user?.username ? user.username.slice(0, 1).toUpperCase() : '?'}
+              {user ? displayName.slice(0, 1).toUpperCase() : '?'}
             </Text>
           )}
           <View className="profile-card__avatar-badge">
@@ -180,11 +184,16 @@ export default function ProfilePage() {
         </View>
         <View className="profile-card__info">
           <View className="row">
-            <Text className="profile-card__name">{user?.username || '未登录'}</Text>
+            <Text className="profile-card__name">{displayName}</Text>
             <View className={`tag ${isAdmin ? 'tag--admin' : 'tag--user'} profile-card__tag`}>
               {isAdmin ? '管理员' : '普通用户'}
             </View>
           </View>
+          {user?.nickname ? (
+            <Text className="profile-card__id">
+              账号：{user.username}（需修改请联系管理员）
+            </Text>
+          ) : null}
           <Text className="profile-card__id">ID：{user?.id || '-'}</Text>
           <Text className="profile-card__hint">
             {user?.avatar ? '点击头像可更换' : '点击头像可上传'}
@@ -198,20 +207,21 @@ export default function ProfilePage() {
       </View>
 
       <View className="card">
-        <Text className="profile-form__title">修改用户名</Text>
+        <Text className="profile-form__title">修改昵称</Text>
+        <Text className="profile-form__hint">留空并保存可清除昵称，界面回退显示账号</Text>
         <View className="profile-form__row">
           <Input
             className="input profile-form__input"
-            value={usernameInput}
-            placeholder={`当前：${user?.username || '-'}`}
-            maxlength={50}
-            onInput={(e) => setUsernameInput(e.detail.value)}
+            value={nicknameInput}
+            placeholder={`当前：${user?.nickname || '未设置'}`}
+            maxlength={30}
+            onInput={(e) => setNicknameInput(e.detail.value)}
           />
           <View
-            className={`btn btn--sm${usernameBusy ? ' btn--disabled' : ''}`}
-            onClick={() => void saveUsername()}
+            className={`btn btn--sm${nicknameBusy ? ' btn--disabled' : ''}`}
+            onClick={() => void saveNickname()}
           >
-            <Text>{usernameBusy ? '保存中' : '保存'}</Text>
+            <Text>{nicknameBusy ? '保存中' : '保存'}</Text>
           </View>
         </View>
       </View>

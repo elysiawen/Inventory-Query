@@ -4,8 +4,15 @@ const USER_KEY = "inv_user";
 export interface AuthUser {
   id: string;
   username: string;
+  nickname?: string | null;
   role: "ADMIN" | "USER";
   avatar?: string | null;
+}
+
+/** 展示名：优先昵称，未设置时回退账号 */
+export function displayNameOf(user: { username: string; nickname?: string | null } | null): string {
+  if (!user) return "";
+  return user.nickname?.trim() || user.username;
 }
 
 export function getToken(): string | null {

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { saveImageFile, removeUploadedFile } from "@/lib/uploads";
 
-const userSelect = { id: true, username: true, role: true, avatar: true };
+const userSelect = { id: true, username: true, nickname: true, role: true, avatar: true };
 
 /** POST 上传并替换自己的头像（登录用户） */
 export async function POST(req: NextRequest) {

@@ -76,3 +76,39 @@
   font-size: 22rpx;
   color: #94a3b8;
 }
+
+/* 已登录冷启动时的过渡遮罩：盖住整屏，避免跳转前闪一下登录界面 */
+.login-boot {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #e8f0ff 0%, #f1f5f9 420rpx, #f1f5f9 100%);
+}
+
+.login-boot__spinner {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  border: 6rpx solid rgba(37, 99, 235, 0.18);
+  border-top-color: #2563eb;
+  animation: login-boot-spin 0.9s linear infinite;
+}
+
+.login-boot__text {
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  color: #64748b;
+}
+
+@keyframes login-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

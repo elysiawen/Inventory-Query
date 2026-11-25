@@ -7,6 +7,7 @@ import { removeUploadedFile } from "@/lib/uploads";
 const userSelect = {
   id: true,
   username: true,
+  nickname: true,
   role: true,
   active: true,
   avatar: true,
@@ -21,7 +22,13 @@ export async function PUT(
   const guard = await requireAdmin(req);
   if (guard.response) return guard.response;
 
-  let body: { username?: string; password?: string; role?: string; active?: boolean };
+  let body: {
+    username?: string;
+    password?: string;
+    role?: string;
+    active?: boolean;
+    nickname?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -61,10 +68,19 @@ export async function PUT(
 
   const data: {
     username?: string;
+    nickname?: string | null;
     passwordHash?: string;
     role?: "ADMIN" | "USER";
     active?: boolean;
   } = {};
+  if (body.nickname !== undefined) {
+    // 空字符串表示清除昵称，页面回退显示账号
+    const nickname = String(body.nickname).trim() || null;
+    if (nickname && nickname.length > 30) {
+      return NextResponse.json({ error: "昵称最多 30 个字符" }, { status: 400 });
+    }
+    data.nickname = nickname;
+  }
   if (body.username !== undefined) {
     const username = String(body.username).trim();
     if (!/^\S{1,50}$/.test(username)) {

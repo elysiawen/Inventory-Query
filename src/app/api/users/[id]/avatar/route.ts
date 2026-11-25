@@ -6,6 +6,7 @@ import { saveImageFile, removeUploadedFile } from "@/lib/uploads";
 const userSelect = {
   id: true,
   username: true,
+  nickname: true,
   role: true,
   active: true,
   avatar: true,

@@ -28,5 +28,9 @@ export function formatUptime(seconds: number): string {
 /** 统一错误提示 */
 export function errorMessage(e: unknown): string {
   if (e instanceof Error && e.message) return e.message
+  // Taro 的失败对象不是 Error（如 chooseImage 取消返回 { errMsg: 'chooseImage:fail cancel' }），
+  // 取 errMsg 才能让上层的 cancel 判断和真实原因生效
+  const errMsg = (e as { errMsg?: unknown })?.errMsg
+  if (typeof errMsg === 'string' && errMsg) return errMsg
   return '操作失败，请稍后重试'
 }

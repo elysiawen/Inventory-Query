@@ -92,7 +92,9 @@ export default function ItemImportModal({ visible, onClose, onImported }: Props)
       }
       setSplitQty(init)
     } catch (e) {
-      toast(errorMessage(e))
+      // 取消选择文件不是错误，不弹提示
+      const message = errorMessage(e)
+      if (!message.includes('cancel')) toast(message)
     } finally {
       setParsing(false)
     }

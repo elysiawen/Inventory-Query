@@ -38,18 +38,26 @@ const MAX_EDGE: Record<UploadKind, number> = { items: 800, avatars: 256 };
 
 /**
  * 服务端压缩图片：按 EXIF 纠正方向、限制最长边并按格式重新编码。
- * GIF 可能是动图（sharp 会丢掉其余帧），直接保留原图；压缩失败时同样回退原图。
- * 压缩结果比原图更大时也保留原图。
+ * 图片无法解码时直接拒绝；仅编码阶段失败或压缩结果更大时保留原图。
+ * GIF 可能是动图（sharp 会丢掉其余帧），只校验可解码、不做重编码。
  */
 async function compressImage(
   buffer: Buffer,
   ext: string,
   kind: UploadKind,
-): Promise<Buffer> {
-  if (ext === ".gif") return buffer;
+): Promise<{ ok: true; buffer: Buffer } | { ok: false }> {
+  let meta: Awaited<ReturnType<ReturnType<typeof sharp>["metadata"]>>;
   try {
-    let pipeline = sharp(buffer).rotate();
-    const meta = await sharp(buffer).metadata();
+    meta = await sharp(buffer).metadata();
+  } catch {
+    // 文件头合法但内容损坏（或不是真正的图片），拒绝落盘，避免保存无法展示的垃圾文件
+    return { ok: false };
+  }
+  // GIF 与动画 WebP 存在多帧，re-encode 只保留首帧，直接原样保存
+  if (ext === ".gif" || (meta.pages ?? 1) > 1) return { ok: true, buffer };
+
+  try {
+    let pipeline = sharp(buffer).rotate().toColourspace("srgb");
     const maxEdge = MAX_EDGE[kind];
     if (meta.width && meta.height && Math.max(meta.width, meta.height) > maxEdge) {
       pipeline = pipeline.resize({
@@ -67,9 +75,9 @@ async function compressImage(
       pipeline = pipeline.jpeg({ quality: 75, mozjpeg: true });
     }
     const compressed = await pipeline.toBuffer();
-    return compressed.length < buffer.length ? compressed : buffer;
+    return { ok: true, buffer: compressed.length < buffer.length ? compressed : buffer };
   } catch {
-    return buffer;
+    return { ok: true, buffer };
   }
 }
 
@@ -90,7 +98,12 @@ export async function saveImageFile(
     return { ok: false, error: "文件内容与扩展名不匹配", status: 400 };
   }
 
-  const buffer = await compressImage(original, ext, kind);
+  const compressed = await compressImage(original, ext, kind);
+  if (!compressed.ok) {
+    return { ok: false, error: "图片无法解析，请更换文件", status: 400 };
+  }
+
+  const buffer = compressed.buffer;
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
   const dir = path.join(UPLOAD_ROOT(), kind);
   await mkdir(dir, { recursive: true });

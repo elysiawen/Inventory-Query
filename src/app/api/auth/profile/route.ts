@@ -3,28 +3,42 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 
-const userSelect = { id: true, username: true, role: true, avatar: true };
+const userSelect = { id: true, username: true, nickname: true, role: true, avatar: true };
 
 /** PUT 修改自己的用户名 / 密码（登录用户） */
 export async function PUT(req: NextRequest) {
   const guard = await requireAuth(req);
   if (guard.response) return guard.response;
 
-  let body: { username?: unknown; password?: unknown; oldPassword?: unknown };
+  let body: {
+    username?: unknown;
+    nickname?: unknown;
+    password?: unknown;
+    oldPassword?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
   }
 
-  const data: { username?: string; passwordHash?: string } = {};
-
+  // 用户名只能由管理员在账号管理中修改，普通用户仅可改昵称与密码
   if (body.username !== undefined) {
-    const username = String(body.username).trim();
-    if (!/^\S{1,50}$/.test(username)) {
-      return NextResponse.json({ error: "账号需为 1-50 个非空白字符" }, { status: 400 });
+    return NextResponse.json(
+      { error: "用户名不能自行修改，请联系管理员" },
+      { status: 400 },
+    );
+  }
+
+  const data: { nickname?: string | null; passwordHash?: string } = {};
+
+  if (body.nickname !== undefined) {
+    // 空字符串表示清除昵称，页面回退显示账号
+    const nickname = String(body.nickname).trim() || null;
+    if (nickname && nickname.length > 30) {
+      return NextResponse.json({ error: "昵称最多 30 个字符" }, { status: 400 });
     }
-    data.username = username;
+    data.nickname = nickname;
   }
 
   if (body.password !== undefined && body.password !== "") {

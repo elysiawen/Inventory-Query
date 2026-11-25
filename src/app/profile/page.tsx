@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   api,
+  displayNameOf,
   getStoredUser,
   getToken,
   refreshStoredUser,
@@ -19,10 +20,10 @@ export default function ProfilePage() {
   const toast = useToast();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [username, setUsername] = useState("");
+  const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [oldPassword, setOldPassword] = useState("");
-  const [savingUsername, setSavingUsername] = useState(false);
+  const [savingNickname, setSavingNickname] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
@@ -78,26 +79,23 @@ export default function ProfilePage() {
     }
   }
 
-  async function saveUsername() {
-    const name = username.trim();
-    if (!name) {
-      toast.error("请输入新的用户名");
+  async function saveNickname() {
+    const next = nickname.trim();
+    if (next === (user?.nickname ?? "")) {
+      toast.error("昵称没有变化");
       return;
     }
-    if (name === user?.username) {
-      toast.error("用户名没有变化");
-      return;
-    }
-    setSavingUsername(true);
+    setSavingNickname(true);
     try {
-      const latest = (await api.put("/api/auth/profile", { username: name })) as AuthUser;
+      // 空字符串表示清除昵称，页面回退显示账号
+      const latest = (await api.put("/api/auth/profile", { nickname: next })) as AuthUser;
       applyUser(latest);
-      setUsername("");
-      toast.success("用户名已更新");
+      setNickname("");
+      toast.success(next ? "昵称已更新" : "昵称已清除");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
-      setSavingUsername(false);
+      setSavingNickname(false);
     }
   }
 
@@ -125,7 +123,8 @@ export default function ProfilePage() {
 
   if (!ready) return <Loading fullScreen text="正在加载个人资料…" />;
 
-  const letter = user?.username ? user.username.charAt(0).toUpperCase() : "?";
+  const displayName = displayNameOf(user);
+  const letter = displayName ? displayName.charAt(0).toUpperCase() : "?";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -170,11 +169,14 @@ export default function ProfilePage() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-lg font-semibold text-slate-800">
-                  {user?.username || "-"}
+                  {displayName || "-"}
                 </span>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
                   {user?.role === "ADMIN" ? "管理员" : "普通用户"}
                 </span>
+              </div>
+              <div className="mt-0.5 text-xs text-slate-400">
+                账号：{user?.username || "-"}（需修改请联系管理员）
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -211,21 +213,22 @@ export default function ProfilePage() {
         </div>
 
         <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-700">修改用户名</h2>
+          <h2 className="text-sm font-semibold text-slate-700">修改昵称</h2>
+          <p className="mt-1 text-xs text-slate-400">留空并保存可清除昵称，界面会回退显示账号</p>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <input
               className={`${inputCls} sm:w-auto sm:flex-1`}
-              value={username}
-              maxLength={50}
-              placeholder={`当前：${user?.username || "-"}`}
-              onChange={(e) => setUsername(e.target.value)}
+              value={nickname}
+              maxLength={30}
+              placeholder={`当前：${user?.nickname || "未设置"}`}
+              onChange={(e) => setNickname(e.target.value)}
             />
             <button
-              onClick={() => void saveUsername()}
-              disabled={savingUsername}
+              onClick={() => void saveNickname()}
+              disabled={savingNickname}
               className="shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
             >
-              {savingUsername ? "保存中…" : "保存"}
+              {savingNickname ? "保存中…" : "保存"}
             </button>
           </div>
         </section>
