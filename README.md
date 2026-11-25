@@ -5,7 +5,7 @@ A full-stack inventory query and stock management system: a Next.js web app (sea
 ## Features
 
 - Search: keyword, category, and exact/range filters on inner (bore) diameter, outer diameter, and height (length); multi-field sorting and pagination
-- Admin console: items (with image upload, stock in/out, Excel bulk import), categories, users, stock logs, system status
+- Admin console: items (with compressed image upload, stock in/out, Excel bulk import), categories, users, stock logs, system status
 - Profile: update avatar, username, and password (password change requires the current password)
 - WeChat Mini Program: search, item/category/user/stock-log management, system status
 - Security: JWT with per-request database verification, login rate limiting, last-admin protection, and concurrency-safe stock operations that never oversell
@@ -16,6 +16,7 @@ A full-stack inventory query and stock management system: a Next.js web app (sea
 - Prisma 5 + PostgreSQL
 - Taro 4 + React (WeChat Mini Program)
 - JWT (jsonwebtoken) + bcryptjs
+- sharp (server-side image compression)
 
 ## Local Development
 
@@ -29,6 +30,15 @@ npm run dev                 # http://localhost:3000
 ```
 
 Production build: `npm run build && npm run start`. Images uploaded at runtime are stored in `public/uploads`; do not delete this directory when redeploying.
+
+## Image Uploads
+
+All uploads (item images and avatars) go through the same server-side pipeline:
+
+- Allowed types: PNG / JPG / GIF / WEBP, up to 5 MB per file; the extension and the file signature must both match
+- Compressed with `sharp` before being written to disk: the longest edge is limited to 800 px for item images and 256 px for avatars, JPEG/WebP are re-encoded at quality 75, PNG is quantized at quality 70, and EXIF orientation is applied
+- The original file is kept when compression fails or does not make the file smaller; GIF is left untouched so animated images keep all frames
+- Stored as `public/uploads/items/<timestamp>-<random>.<ext>` or `public/uploads/avatars/...`; only the new uploads are compressed, existing files are not reprocessed
 
 ## WeChat Mini Program
 

@@ -15,7 +15,7 @@ const nextConfig = {
   reactStrictMode: true,
   // Next 15+ / Turbopack 下需将 Prisma 客户端与 bcryptjs 标记为外部包，
   // 否则打包后在 Route Handler 中运行会报错
-  serverExternalPackages: ["@prisma/client", "bcryptjs"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "sharp"],
   // Next 16 默认只允许 localhost 访问 dev 资源；局域网 IP 访问时也要放行，否则页面卡在初始加载态
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.50.87"],
   // next start 只提供构建时已存在的 public 文件，上传后新增的图片会 404；
