@@ -82,8 +82,8 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState("updatedAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  // 未滚动时显示完整筛选，下滑到顶部后收起成一条搜索条
-  const [filterCollapsed, setFilterCollapsed] = useState(false);
+  // 完整筛选卡片滚出视野后，浮出固定搜索条（固定定位不占布局，避免滚动跳动）
+  const [compactShown, setCompactShown] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -131,13 +131,15 @@ export default function SearchPage() {
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, [menuOpen]);
 
-  // 搜索区顶部贴到视口顶端时收起为紧凑搜索条，回到顶部再展开
+  // 完整筛选卡片完全滚出视口后浮出固定搜索条；滚回时收起并关闭高级面板
   useEffect(() => {
     if (!authorized) return;
     function onScroll() {
       const el = filterRef.current;
       if (!el) return;
-      setFilterCollapsed(el.getBoundingClientRect().top <= 0);
+      const shown = el.getBoundingClientRect().bottom <= 0;
+      setCompactShown(shown);
+      if (!shown) setAdvancedOpen(false);
     }
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -379,31 +381,21 @@ export default function SearchPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
-        {/* 顶部完整筛选；下滑贴顶后收起为一条搜索条，切换带过渡动画 */}
+        {/* 顶部完整筛选卡片：正常流布局，滚出视野后由下面的固定搜索条接管 */}
         <div
           ref={filterRef}
-          className={`sticky top-0 z-30 mb-4 transition-all duration-300 ease-out sm:mb-6 ${
-            filterCollapsed
-              ? "-mx-4 border-b border-slate-200 bg-slate-50/95 px-4 py-2.5 shadow-sm backdrop-blur sm:-mx-6 sm:px-6 sm:py-3"
-              : "rounded-xl border border-slate-200 bg-white p-3 sm:p-4"
-          }`}
+          className="mb-4 rounded-xl border border-slate-200 bg-white p-3 sm:mb-6 sm:p-4"
         >
-          <div
-            className={`mx-auto flex max-w-6xl gap-2 ${
-              filterCollapsed ? "items-center" : "flex-col sm:flex-row sm:items-center"
-            }`}
-          >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
-              className={`${inputCls} min-w-0 ${filterCollapsed ? "flex-1" : "w-full sm:flex-1"}`}
+              className={`${inputCls} w-full sm:min-w-0 sm:flex-1`}
               placeholder="关键词（名称 / 型号）"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applySearch()}
             />
             <select
-              className={`${inputCls} shrink-0 ${
-                filterCollapsed ? "w-[92px] sm:w-40" : "w-full sm:w-40"
-              }`}
+              className={`${inputCls} w-full shrink-0 sm:w-40`}
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
             >
@@ -414,87 +406,91 @@ export default function SearchPage() {
                 </option>
               ))}
             </select>
-            <div className={`flex gap-2 ${filterCollapsed ? "shrink-0" : "w-full sm:w-auto"}`}>
+            <div className="flex gap-2">
               <button
                 onClick={applySearch}
-                className={`rounded-lg bg-blue-600 py-2 text-sm font-medium text-white transition hover:bg-blue-700 active:scale-95 ${
-                  filterCollapsed ? "shrink-0 px-4" : "flex-1 px-5 sm:flex-none"
-                }`}
+                className="flex-1 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 active:scale-95 sm:flex-none"
               >
                 查询
               </button>
-              {/* 展开态显示「重置」，收起后平滑让位给「高级」 */}
-              <div
-                className={`overflow-hidden transition-all duration-300 ease-out ${
-                  filterCollapsed
-                    ? "max-w-0 opacity-0"
-                    : "max-w-[200px] flex-1 opacity-100 sm:flex-none"
-                }`}
+              <button
+                onClick={resetSearch}
+                className="flex-1 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 sm:flex-none"
               >
-                <button
-                  onClick={resetSearch}
-                  className="w-full whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                >
-                  重置
-                </button>
-              </div>
-              <div
-                className={`shrink-0 overflow-hidden transition-all duration-300 ease-out ${
-                  filterCollapsed ? "max-w-[160px] opacity-100" : "max-w-0 opacity-0"
-                }`}
-              >
-                <button
-                  onClick={() => setAdvancedOpen((v) => !v)}
-                  aria-expanded={advancedOpen}
-                  className={`flex items-center gap-1 whitespace-nowrap rounded-lg border px-3 py-2 text-sm transition ${
-                    advancedOpen || advancedCount > 0
-                      ? "border-blue-300 bg-blue-50 text-blue-700"
-                      : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  高级
-                  {advancedCount > 0 && (
-                    <span className="rounded-full bg-blue-600 px-1.5 text-[10px] font-semibold leading-4 text-white">
-                      {advancedCount}
-                    </span>
-                  )}
-                </button>
-              </div>
+                重置
+              </button>
             </div>
           </div>
 
-          {/* 尺寸条件：展开时常显，收起后由「高级」控制，用 grid-rows 平滑展开收起 */}
-          <div
-            className={`mx-auto grid max-w-6xl transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${
-              !filterCollapsed || advancedOpen
-                ? "mt-2.5 grid-rows-[1fr] opacity-100"
-                : "mt-0 grid-rows-[0fr] opacity-0"
-            }`}
-          >
-            <div className="min-h-0 overflow-hidden">
-              <div
-                className={`transition-all duration-300 ease-out ${
-                  filterCollapsed
-                    ? "rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
-                    : ""
-                }`}
-              >
-                {renderDimInputs()}
-                <div
-                  className={`flex justify-end overflow-hidden transition-all duration-300 ease-out ${
-                    filterCollapsed ? "mt-3 max-h-24 opacity-100" : "max-h-0 opacity-0"
-                  }`}
+          <div className="mt-2.5">{renderDimInputs()}</div>
+        </div>
+
+        {/* 卡片滚出视野后浮出的固定搜索条：fixed 不占布局，避免高度变化引起滚动跳动 */}
+        <div
+          className={`fixed left-1/2 top-0 z-40 w-full max-w-6xl -translate-x-1/2 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur transition-all duration-200 ease-out sm:rounded-b-xl sm:border-x ${
+            compactShown
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none -translate-y-full opacity-0"
+          }`}
+        >
+          <div className="flex items-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3">
+            <input
+              className={`${inputCls} min-w-0 flex-1`}
+              placeholder="关键词（名称 / 型号）"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applySearch()}
+            />
+            <select
+              className={`${inputCls} w-[92px] shrink-0 sm:w-40`}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">全部分类</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={applySearch}
+              className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 active:scale-95"
+            >
+              查询
+            </button>
+            <button
+              onClick={() => setAdvancedOpen((v) => !v)}
+              aria-expanded={advancedOpen}
+              className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border px-3 py-2 text-sm transition ${
+                advancedOpen || advancedCount > 0
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              高级
+              {advancedCount > 0 && (
+                <span className="rounded-full bg-blue-600 px-1.5 text-[10px] font-semibold leading-4 text-white">
+                  {advancedCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {advancedOpen && (
+            <div className="max-h-[70vh] overflow-y-auto border-t border-slate-100 bg-white px-4 pb-4 pt-3 sm:px-6">
+              {renderDimInputs()}
+
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={resetSearch}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
                 >
-                  <button
-                    onClick={resetSearch}
-                    className="rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-                  >
-                    重置全部
-                  </button>
-                </div>
+                  重置全部
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {loading ? (
