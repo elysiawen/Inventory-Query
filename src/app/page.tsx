@@ -441,18 +441,21 @@ export default function SearchPage() {
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applySearch()}
             />
-            <select
-              className={`${inputCls} w-[92px] shrink-0 sm:w-40`}
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">全部分类</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {/* 宽度放在外层：inputCls 自带 w-full，同级再写 w-[92px] 会因产物中样式顺序不确定而失效 */}
+            <div className="w-[96px] shrink-0 sm:w-40">
+              <select
+                className={inputCls}
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
+                <option value="">全部分类</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               onClick={applySearch}
               className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 active:scale-95"
