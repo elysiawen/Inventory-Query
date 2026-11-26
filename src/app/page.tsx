@@ -216,6 +216,7 @@ export default function SearchPage() {
     }
     setPage(1);
     setApplied({ keyword, categoryId, dims, sortBy, sortOrder });
+    setAdvancedOpen(false);
   }
   function applySort(field: string, order: "asc" | "desc") {
     setSortBy(field);
@@ -251,6 +252,41 @@ export default function SearchPage() {
     const v = dims[d.key];
     return v.mode === "exact" ? v.exact !== "" : v.min !== "" || v.max !== "";
   }).length;
+
+  // 手机端分类胶囊：完整筛选卡片与吸顶条高级面板共用，样式对齐小程序
+  const renderCategoryChips = (className = "") => (
+    <div
+      className={`-mx-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
+    >
+      <div className="flex w-max gap-1.5 px-1 py-0.5">
+        <button
+          type="button"
+          onClick={() => setCategoryId("")}
+          className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs transition ${
+            categoryId === ""
+              ? "bg-blue-600 font-semibold text-white"
+              : "bg-slate-100 text-slate-600 active:bg-slate-200"
+          }`}
+        >
+          全部分类
+        </button>
+        {categories.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setCategoryId(c.id)}
+            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs transition ${
+              categoryId === c.id
+                ? "bg-blue-600 font-semibold text-white"
+                : "bg-slate-100 text-slate-600 active:bg-slate-200"
+            }`}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   // 三个尺寸输入组：完整筛选和收起后的高级面板共用
   const renderDimInputs = () => (
@@ -400,18 +436,22 @@ export default function SearchPage() {
               onChange={(e) => setKeyword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applySearch()}
             />
-            <select
-              className={`${inputCls} w-full shrink-0 sm:w-40`}
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">全部分类</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {/* 手机端分类用胶囊横向滚动，样式对齐小程序；桌面端保留下拉 */}
+            {renderCategoryChips("w-full sm:hidden")}
+            <div className="hidden w-full shrink-0 sm:block sm:w-40">
+              <select
+                className={inputCls}
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
+                <option value="">全部分类</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={applySearch}
@@ -448,7 +488,7 @@ export default function SearchPage() {
               onKeyDown={(e) => e.key === "Enter" && applySearch()}
             />
             {/* 宽度放在外层：inputCls 自带 w-full，同级再写 w-[92px] 会因产物中样式顺序不确定而失效 */}
-            <div className="w-[96px] shrink-0 sm:w-40">
+            <div className="hidden w-full shrink-0 sm:block sm:w-40">
               <select
                 className={inputCls}
                 value={categoryId}
@@ -488,6 +528,11 @@ export default function SearchPage() {
 
           {advancedOpen && (
             <div className="max-h-[70vh] overflow-y-auto border-t border-slate-100 bg-white px-4 pb-4 pt-3 sm:px-6">
+              {/* 手机端分类收进高级面板，与小程序一致；桌面端用吸顶条的下拉 */}
+              <div className="mb-3 sm:hidden">
+                <div className="mb-1.5 text-xs text-slate-500">分类</div>
+                {renderCategoryChips()}
+              </div>
               {renderDimInputs()}
 
               <div className="mt-3 flex justify-end">
