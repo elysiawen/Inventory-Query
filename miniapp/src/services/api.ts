@@ -34,6 +34,15 @@ export const updateProfile = (data: {
   oldPassword?: string
 }) => request<AuthUser>('/api/auth/profile', { method: 'PUT', data })
 
+/** 退出登录：让服务端作废当前这一端的会话，其他设备不受影响；失败时不阻塞本地退出 */
+export const logoutRemote = async () => {
+  try {
+    await request<{ success: boolean }>('/api/auth/logout', { method: 'POST' })
+  } catch {
+    // 服务端不可达时仍允许本地退出
+  }
+}
+
 export interface ItemSearchParams {
   keyword?: string
   categoryId?: string

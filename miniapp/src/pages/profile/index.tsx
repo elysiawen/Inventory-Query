@@ -2,7 +2,7 @@ import { Image, Input, Text, View } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { useEffect, useState } from 'react'
 import TabNav from '../../components/TabNav'
-import { fetchMe, removeAvatar as removeMyAvatar, updateProfile } from '../../services/api'
+import { fetchMe, logoutRemote, removeAvatar as removeMyAvatar, updateProfile } from '../../services/api'
 import { assetUrl, uploadAvatar } from '../../services/request'
 import { clearAuth, getStoredUser, getToken, setStoredUser } from '../../services/storage'
 import type { AuthUser } from '../../services/types'
@@ -140,7 +140,10 @@ export default function ProfilePage() {
       await updateProfile({ password: passwordInput, oldPassword: oldPasswordInput })
       setPasswordInput('')
       setOldPasswordInput('')
-      Taro.showToast({ title: '密码已更新', icon: 'success' })
+      // 改密后服务端会话版本已更换，旧 token 立即失效，必须重新登录
+      Taro.showToast({ title: '密码已更新，请重新登录', icon: 'none' })
+      clearAuth()
+      Taro.reLaunch({ url: '/pages/login/index' })
     } catch (e) {
       Taro.showToast({ title: errorMessage(e), icon: 'none' })
     } finally {
@@ -156,6 +159,7 @@ export default function ProfilePage() {
       confirmColor: '#dc2626'
     })
     if (!res.confirm) return
+    await logoutRemote()
     clearAuth()
     Taro.reLaunch({ url: '/pages/login/index' })
   }

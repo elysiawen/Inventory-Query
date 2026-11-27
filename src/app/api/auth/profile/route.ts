@@ -31,6 +31,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const data: { nickname?: string | null; passwordHash?: string } = {};
+  let passwordChanged = false;
 
   if (body.nickname !== undefined) {
     // 空字符串表示清除昵称，页面回退显示账号
@@ -59,6 +60,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "原密码不正确" }, { status: 400 });
     }
     data.passwordHash = await hashPassword(password);
+    passwordChanged = true;
   }
 
   if (Object.keys(data).length === 0) {
@@ -66,10 +68,17 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const user = await prisma.user.update({
-      where: { id: guard.user!.id },
-      data,
-      select: userSelect,
+    // 改密码与会话作废放在同一事务，避免密码已改但旧会话仍可使用
+    const user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: guard.user!.id },
+        data,
+        select: userSelect,
+      });
+      if (passwordChanged) {
+        await tx.session.deleteMany({ where: { userId: guard.user!.id } });
+      }
+      return updated;
     });
     return NextResponse.json(user);
   } catch (e: unknown) {

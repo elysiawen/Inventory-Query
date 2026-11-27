@@ -26,10 +26,26 @@
 }
 
 .feedback__empty-icon {
-  width: 60rpx;
-  height: 60rpx;
-  border-radius: 16rpx;
-  background: #e2e8f0;
+  position: relative;
+  box-sizing: border-box;
+  width: 96rpx;
+  height: 96rpx;
+  border: 4rpx solid #cbd5e1;
+  border-radius: 20rpx;
+  background: #ffffff;
+}
+
+/* 内部三条横线，画成「空列表」图标 */
+.feedback__empty-icon::before {
+  content: '';
+  position: absolute;
+  left: 20rpx;
+  right: 20rpx;
+  top: 26rpx;
+  height: 4rpx;
+  border-radius: 2rpx;
+  background: #cbd5e1;
+  box-shadow: 0 16rpx 0 #cbd5e1, 0 32rpx 0 #e2e8f0;
 }
 
 .feedback__text {

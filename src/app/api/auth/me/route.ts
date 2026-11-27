@@ -5,5 +5,12 @@ import { requireAuth } from "@/lib/auth";
 export async function GET(req: NextRequest) {
   const guard = await requireAuth(req);
   if (guard.response) return guard.response;
-  return NextResponse.json(guard.user);
+  const user = guard.user!;
+  return NextResponse.json({
+    id: user.id,
+    username: user.username,
+    nickname: user.nickname,
+    role: user.role,
+    avatar: user.avatar,
+  });
 }

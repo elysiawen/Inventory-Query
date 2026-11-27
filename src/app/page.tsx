@@ -3,9 +3,10 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, displayNameOf, getStoredUser, getToken, logout, refreshStoredUser } from "@/lib/api";
-import { Pagination, inputCls, Loading } from "@/components/ui";
+import { api, displayNameOf, getStoredUser, getToken, logout, logoutRemote, refreshStoredUser } from "@/lib/api";
+import { Pagination, inputCls, Loading, Modal } from "@/components/ui";
 import { useToast } from "@/components/ToastProvider";
+import { useConfirm } from "@/components/ConfirmProvider";
 
 interface CategoryOption {
   id: string;
@@ -64,6 +65,7 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
 export default function SearchPage() {
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const [user, setUser] = useState(getStoredUser());
   const [data, setData] = useState<PageData | null>(null);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -86,6 +88,14 @@ export default function SearchPage() {
   const [compactShown, setCompactShown] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // 搜索结果上的出入库弹窗
+  const [stockTarget, setStockTarget] = useState<{
+    item: SearchItem;
+    type: "IN" | "OUT";
+  } | null>(null);
+  const [stockQty, setStockQty] = useState("1");
+  const [stockRemark, setStockRemark] = useState("");
+  const [stockBusy, setStockBusy] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0);
   const [applied, setApplied] = useState({
@@ -103,11 +113,7 @@ export default function SearchPage() {
       router.replace("/login");
       return;
     }
-    // 管理员默认进后台；带 mode=search 表示从后台主动来前台查询，需留在前台
-    if (u.role === "ADMIN" && !new URLSearchParams(window.location.search).has("mode")) {
-      router.replace("/admin/items");
-      return;
-    }
+    // 访问哪里就停在哪里：管理员打开根目录也留在前台搜索页
     setUser(u);
     setAuthorized(true);
   }, [router]);
@@ -239,12 +245,54 @@ export default function SearchPage() {
       sortOrder: "desc",
     });
   }
-  function handleLogout() {
+  async function handleLogout() {
+    const ok = await confirm("退出后需要重新登录才能继续使用，确定退出吗？", {
+      title: "退出登录",
+      confirmText: "退出",
+      confirmColor: "red",
+    });
+    if (!ok) return;
+    await logoutRemote();
     logout();
     router.replace("/login");
   }
 
+  function openStock(item: SearchItem, type: "IN" | "OUT") {
+    setStockTarget({ item, type });
+    setStockQty("1");
+    setStockRemark("");
+  }
+
+  async function submitStock() {
+    if (!stockTarget || stockBusy) return;
+    const qty = Number(stockQty);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      toast.error("请输入大于 0 的整数数量");
+      return;
+    }
+    if (stockTarget.type === "OUT" && qty > stockTarget.item.quantity) {
+      toast.error(`出库数量不能超过当前库存 ${stockTarget.item.quantity}`);
+      return;
+    }
+    setStockBusy(true);
+    try {
+      const path = stockTarget.type === "IN" ? "stock-in" : "stock-out";
+      await api.post(`/api/items/${stockTarget.item.id}/${path}`, {
+        quantity: qty,
+        remark: stockRemark.trim() || undefined,
+      });
+      toast.success(stockTarget.type === "IN" ? "入库成功" : "出库成功");
+      setStockTarget(null);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setStockBusy(false);
+    }
+  }
+
   const displayName = displayNameOf(user);
+  const isAdmin = user?.role === "ADMIN";
   const avatarLetter = displayName ? displayName.charAt(0).toUpperCase() : "?";
 
   // 已填写的尺寸条件数量，收起时也能一眼看出有没有生效
@@ -410,7 +458,7 @@ export default function SearchPage() {
                   </Link>
                 )}
                 <button
-                  onClick={handleLogout}
+                  onClick={() => void handleLogout()}
                   className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 transition hover:bg-red-50"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
@@ -672,6 +720,24 @@ export default function SearchPage() {
                         备注：{item.remark}
                       </p>
                     )}
+
+                    {isAdmin && (
+                      <div className="mt-2.5 flex gap-2">
+                        <button
+                          onClick={() => openStock(item, "IN")}
+                          className="flex-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition active:bg-blue-100"
+                        >
+                          入库
+                        </button>
+                        <button
+                          onClick={() => openStock(item, "OUT")}
+                          disabled={item.quantity <= 0}
+                          className="flex-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition active:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          出库
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* 桌面端：纵向卡片 */}
@@ -760,6 +826,23 @@ export default function SearchPage() {
                             {Number(item.price).toFixed(2)}
                           </div>
                         </div>
+                        {isAdmin && (
+                          <div className="mt-2.5 flex gap-2">
+                            <button
+                              onClick={() => openStock(item, "IN")}
+                              className="flex-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+                            >
+                              入库
+                            </button>
+                            <button
+                              onClick={() => openStock(item, "OUT")}
+                              disabled={item.quantity <= 0}
+                              className="flex-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              出库
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -772,7 +855,7 @@ export default function SearchPage() {
                 totalPages={data.totalPages}
                 total={data.total}
                 pageSize={data.pageSize}
-                pageSizeOptions={[15, 30, 50]}
+                pageSizeOptions={[15, 30, 51]}
                 onPageSizeChange={(size) => {
                   setPageSize(size);
                   setPage(1);
@@ -787,6 +870,65 @@ export default function SearchPage() {
           </>
         )}
       </main>
+
+      <Modal
+        open={!!stockTarget}
+        onClose={() => !stockBusy && setStockTarget(null)}
+        title={stockTarget?.type === "IN" ? "入库" : "出库"}
+        width="max-w-sm"
+        footer={
+          <>
+            <button
+              onClick={() => setStockTarget(null)}
+              disabled={stockBusy}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => void submitStock()}
+              disabled={stockBusy}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+            >
+              {stockBusy ? "提交中…" : "确认"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg bg-slate-50 px-3 py-2">
+            <p className="truncate text-sm font-medium text-slate-800">
+              {stockTarget?.item.name}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              型号 {stockTarget?.item.model} · 当前库存 {stockTarget?.item.quantity}
+            </p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-slate-500">数量</label>
+            <input
+              className={inputCls}
+              type="number"
+              min={1}
+              step={1}
+              value={stockQty}
+              onChange={(e) => setStockQty(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void submitStock()}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-slate-500">备注（可选）</label>
+            <input
+              className={inputCls}
+              value={stockRemark}
+              maxLength={100}
+              placeholder="选填，例如用途、领用人"
+              onChange={(e) => setStockRemark(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void submitStock()}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

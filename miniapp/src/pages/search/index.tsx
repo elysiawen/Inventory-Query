@@ -3,10 +3,11 @@ import Taro from '@tarojs/taro'
 import { useEffect, useRef, useState } from 'react'
 import { Empty, ErrorState, Loading } from '../../components/Feedback'
 import ItemCard from '../../components/ItemCard'
+import Modal from '../../components/Modal'
 import Pager from '../../components/Pager'
 import TabNav from '../../components/TabNav'
-import { fetchCategories, searchItems, type ItemSearchParams } from '../../services/api'
-import { getToken } from '../../services/storage'
+import { fetchCategories, fetchMe, searchItems, stockIn, stockOut, type ItemSearchParams } from '../../services/api'
+import { getToken, setStoredUser } from '../../services/storage'
 import type { CategoryRow, ItemRow, PageResult } from '../../services/types'
 import { errorMessage } from '../../utils/format'
 import './index.scss'
@@ -64,6 +65,13 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  // 结果卡片上的出入库弹窗
+  const [stockTarget, setStockTarget] = useState<{ item: ItemRow; type: 'IN' | 'OUT' } | null>(null)
+  const [stockQty, setStockQty] = useState('1')
+  const [stockRemark, setStockRemark] = useState('')
+  const [stockBusy, setStockBusy] = useState(false)
+  // 出入库入口仅管理员可见：默认隐藏，拿到服务端最新角色后再显示
+  const [canStock, setCanStock] = useState(false)
   const seq = useRef(0)
 
   useEffect(() => {
@@ -71,6 +79,13 @@ export default function SearchPage() {
       Taro.reLaunch({ url: '/pages/login/index' })
       return
     }
+    // 每次进入都按服务端最新角色判定出入库入口，避免本地缓存的角色过期
+    fetchMe()
+      .then((u) => {
+        setStoredUser(u)
+        setCanStock(u.role === 'ADMIN')
+      })
+      .catch(() => {})
     fetchCategories()
       .then((list) => setCategories(list))
       .catch((e) => Taro.showToast({ title: errorMessage(e), icon: 'none' }))
@@ -153,6 +168,43 @@ export default function SearchPage() {
 
   function toggleFilter() {
     setShowFilter(!showFilter)
+  }
+
+  function openStock(item: ItemRow, type: 'IN' | 'OUT') {
+    setStockTarget({ item, type })
+    setStockQty('1')
+    setStockRemark('')
+  }
+
+  async function submitStock() {
+    if (!stockTarget || stockBusy) return
+    const quantity = Number(stockQty)
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      Taro.showToast({ title: '请输入大于 0 的整数数量', icon: 'none' })
+      return
+    }
+    if (stockTarget.type === 'OUT' && quantity > stockTarget.item.quantity) {
+      Taro.showToast({
+        title: `出库数量不能超过当前库存 ${stockTarget.item.quantity}`,
+        icon: 'none'
+      })
+      return
+    }
+    setStockBusy(true)
+    try {
+      if (stockTarget.type === 'IN') {
+        await stockIn(stockTarget.item.id, quantity, stockRemark.trim())
+      } else {
+        await stockOut(stockTarget.item.id, quantity, stockRemark.trim())
+      }
+      Taro.showToast({ title: stockTarget.type === 'IN' ? '入库成功' : '出库成功', icon: 'success' })
+      setStockTarget(null)
+      setReloadKey((k) => k + 1)
+    } catch (e) {
+      Taro.showToast({ title: errorMessage(e), icon: 'none' })
+    } finally {
+      setStockBusy(false)
+    }
   }
 
   const items = result?.data || []
@@ -321,7 +373,32 @@ export default function SearchPage() {
       {!loading && result && items.length === 0 ? <Empty text="没有符合条件的物品" /> : null}
 
       {items.map((item) => (
-        <ItemCard key={item.id} item={item} />
+        <ItemCard
+          key={item.id}
+          item={item}
+          footer={
+            canStock ? (
+              <>
+                <View
+                  className="btn btn--sm item-card__stock-btn item-card__stock-btn--in"
+                  onClick={() => openStock(item, 'IN')}
+                >
+                  <Text>入库</Text>
+                </View>
+                <View
+                  className={`btn btn--sm btn--danger item-card__stock-btn${
+                    item.quantity <= 0 ? ' btn--disabled' : ''
+                  }`}
+                  onClick={() => {
+                    if (item.quantity > 0) openStock(item, 'OUT')
+                  }}
+                >
+                  <Text>出库</Text>
+                </View>
+              </>
+            ) : undefined
+          }
+        />
       ))}
 
       {result && result.total > 0 ? (
@@ -333,6 +410,59 @@ export default function SearchPage() {
           onChange={setPage}
         />
       ) : null}
+
+      <Modal
+        visible={!!stockTarget}
+        title={stockTarget?.type === 'IN' ? '入库' : '出库'}
+        onClose={() => {
+          if (!stockBusy) setStockTarget(null)
+        }}
+        footer={
+          <>
+            <View
+              className="btn btn--block modal-btn"
+              onClick={() => {
+                if (!stockBusy) setStockTarget(null)
+              }}
+            >
+              <Text>取消</Text>
+            </View>
+            <View
+              className={`btn btn--primary btn--block modal-btn${stockBusy ? ' btn--disabled' : ''}`}
+              onClick={() => void submitStock()}
+            >
+              <Text className="modal-btn__primary-text">{stockBusy ? '提交中…' : '确认'}</Text>
+            </View>
+          </>
+        }
+      >
+        <View className="stock-info">
+          <Text className="stock-info__name">{stockTarget?.item.name}</Text>
+          <Text className="stock-info__meta">
+            型号 {stockTarget?.item.model} ｜ 当前库存 {stockTarget?.item.quantity}
+          </Text>
+        </View>
+        <View className="field">
+          <Text className="field__label">数量</Text>
+          <Input
+            className="input"
+            type="number"
+            value={stockQty}
+            placeholder="请输入数量"
+            onInput={(e) => setStockQty(e.detail.value)}
+          />
+        </View>
+        <View className="field">
+          <Text className="field__label">备注（可选）</Text>
+          <Input
+            className="input"
+            value={stockRemark}
+            maxlength={100}
+            placeholder="选填，例如用途、领用人"
+            onInput={(e) => setStockRemark(e.detail.value)}
+          />
+        </View>
+      </Modal>
 
       <TabNav current="search" />
     </View>

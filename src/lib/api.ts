@@ -52,6 +52,16 @@ export function logout() {
   setStoredUser(null);
 }
 
+/** 通知服务端作废当前这一端的会话（其他设备不受影响）；网络失败时静默，不阻塞本地退出 */
+export async function logoutRemote() {
+  if (typeof window === "undefined" || !getToken()) return;
+  try {
+    await api.post("/api/auth/logout");
+  } catch {
+    // 服务端不可达时仍允许本地退出
+  }
+}
+
 async function request(path: string, options: RequestInit = {}) {
   const token = getToken();
   const headers: Record<string, string> = { ...(options.headers as Record<string, string>) };

@@ -28,6 +28,20 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   stockLogs    StockLog[]
+  sessions     Session[]
+}
+
+// 登录会话：每次登录生成一条，token 里带会话 ID；退出登录只删当前这一条，
+// 改密码则删除该账号全部会话（所有端强制重新登录）
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  // 最近一次续期时间，用于清理长期不活跃的会话
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Category {

@@ -8,6 +8,7 @@ import {
   displayNameOf,
   getStoredUser,
   getToken,
+  logout,
   refreshStoredUser,
   setStoredUser,
   type AuthUser,
@@ -113,7 +114,10 @@ export default function ProfilePage() {
       await api.put("/api/auth/profile", { password, oldPassword });
       setPassword("");
       setOldPassword("");
-      toast.success("密码已更新");
+      // 改密后服务端会话版本已更换，旧 token 立即失效，必须重新登录
+      toast.success("密码已更新，请重新登录");
+      logout();
+      router.replace("/login");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -139,7 +143,7 @@ export default function ProfilePage() {
             </button>
             <h1 className="text-base font-semibold text-slate-800">个人资料</h1>
           </div>
-          <Link href="/?mode=search" className="text-sm text-blue-600 hover:underline">
+          <Link href="/" className="text-sm text-blue-600 hover:underline">
             首页
           </Link>
         </div>

@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { displayNameOf, getStoredUser, getToken, logout, refreshSessionToken, refreshStoredUser, USER_CHANGED_EVENT } from "@/lib/api";
+import { displayNameOf, getStoredUser, getToken, logout, logoutRemote, refreshSessionToken, refreshStoredUser, USER_CHANGED_EVENT } from "@/lib/api";
 import { Loading } from "./ui";
+import { useConfirm } from "./ConfirmProvider";
 
 const NAV = [
   { href: "/admin/items", label: "物品管理" },
@@ -17,6 +18,7 @@ const NAV = [
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { confirm } = useConfirm();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState(getStoredUser());
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -76,7 +78,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     return <Loading fullScreen text="正在验证登录状态…" />;
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    const ok = await confirm("退出后需要重新登录才能继续使用，确定退出吗？", {
+      title: "退出登录",
+      confirmText: "退出",
+      confirmColor: "red",
+    });
+    if (!ok) return;
+    await logoutRemote();
     logout();
     router.replace("/login");
   }
@@ -153,14 +162,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </div>
           </Link>
           <Link
-            href="/?mode=search"
+            href="/"
             className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-200"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></svg>
             前台
           </Link>
           <button
-            onClick={handleLogout}
+            onClick={() => void handleLogout()}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-500 transition hover:bg-red-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>

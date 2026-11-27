@@ -14,11 +14,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 已登录则直接进入对应首页，避免重复登录
+  // 已登录则直接进入前台搜索页，避免重复登录
   useEffect(() => {
     const user = getStoredUser();
     if (getToken() && user) {
-      router.replace(user.role === "ADMIN" ? "/admin/items" : "/");
+      router.replace("/");
       return;
     }
     setChecked(true);
@@ -34,7 +34,7 @@ export default function LoginPage() {
       };
       setToken(res.token);
       setStoredUser(res.user);
-      router.replace(res.user.role === "ADMIN" ? "/admin/items" : "/");
+      router.replace("/");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {

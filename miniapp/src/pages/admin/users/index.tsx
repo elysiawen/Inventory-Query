@@ -12,7 +12,7 @@ import {
   updateUser
 } from '../../../services/api'
 import { assetUrl, uploadUserAvatar } from '../../../services/request'
-import { getStoredUser, isAdmin, setStoredUser } from '../../../services/storage'
+import { clearAuth, getStoredUser, isAdmin, setStoredUser } from '../../../services/storage'
 import type { UserRow } from '../../../services/types'
 import { errorMessage, formatDateTime } from '../../../utils/format'
 import './index.scss'
@@ -104,6 +104,14 @@ export default function AdminUsersPage() {
           payload.active = active
         }
         const updated = await updateUser(editing.id, payload)
+        // 改自己的密码会作废全部会话，直接回登录页，避免后续请求 401 被动跳转
+        if (isSelf(updated) && password) {
+          toast('密码已更新，请重新登录')
+          clearAuth()
+          setModalOpen(false)
+          Taro.reLaunch({ url: '/pages/login/index' })
+          return
+        }
         // 改的是当前登录账号时同步本地缓存，避免“我的”页仍显示旧账号
         if (isSelf(updated)) {
           setStoredUser({

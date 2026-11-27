@@ -111,10 +111,25 @@ export async function POST(req: NextRequest) {
 
   attempts.delete(key);
 
+  // 顺手清理该账号长期未活跃的会话，避免会话表无限增长（60 天）
+  await prisma.session.deleteMany({
+    where: {
+      userId: user.id,
+      lastSeenAt: { lt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) },
+    },
+  });
+
+  // 每次登录生成独立会话，各设备互不影响
+  const session = await prisma.session.create({
+    data: { userId: user.id },
+    select: { id: true },
+  });
+
   const token = signToken({
     id: user.id,
     username: user.username,
     role: user.role,
+    sid: session.id,
   });
 
   return NextResponse.json({

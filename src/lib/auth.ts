@@ -13,6 +13,8 @@ export function getTokenPayload(req: NextRequest): JwtPayload | null {
 export interface AuthUserInfo extends JwtPayload {
   avatar: string | null;
   nickname: string | null;
+  /** 当前登录会话 ID：退出登录时只删除这一条 */
+  sessionId: string;
 }
 
 interface GuardResult {
@@ -26,18 +28,32 @@ interface GuardResult {
  */
 export async function requireAuth(req: NextRequest): Promise<GuardResult> {
   const payload = getTokenPayload(req);
-  if (!payload) {
+  if (!payload || !payload.sid) {
     return {
       user: null,
       response: NextResponse.json({ error: "未登录或登录已过期" }, { status: 401 }),
     };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.id },
-    select: { id: true, username: true, nickname: true, role: true, active: true, avatar: true },
-  });
-  if (!user || !user.active) {
+  const [user, session] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: payload.id },
+      select: {
+        id: true,
+        username: true,
+        nickname: true,
+        role: true,
+        active: true,
+        avatar: true,
+      },
+    }),
+    prisma.session.findUnique({
+      where: { id: payload.sid },
+      select: { userId: true },
+    }),
+  ]);
+  // 会话记录不存在说明该端已退出登录，或改密后被整体作废
+  if (!user || !user.active || !session || session.userId !== user.id) {
     return {
       user: null,
       response: NextResponse.json({ error: "登录已失效，请重新登录" }, { status: 401 }),
@@ -51,6 +67,7 @@ export async function requireAuth(req: NextRequest): Promise<GuardResult> {
       nickname: user.nickname,
       role: user.role,
       avatar: user.avatar,
+      sessionId: payload.sid,
     },
     response: null,
   };

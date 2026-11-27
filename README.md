@@ -45,7 +45,7 @@ All uploads (item images and avatars) go through the same server-side pipeline:
 ```bash
 cd miniapp
 npm install
-# set TARO_APP_API_BASE in .env.development / .env.production
+cp .env.example .env.development   # set TARO_APP_API_BASE; create .env.production for release builds
 npm run dev:weapp           # output in miniapp/dist
 ```
 

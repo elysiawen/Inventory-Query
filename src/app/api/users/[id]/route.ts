@@ -73,6 +73,7 @@ export async function PUT(
     role?: "ADMIN" | "USER";
     active?: boolean;
   } = {};
+  let passwordChanged = false;
   if (body.nickname !== undefined) {
     // 空字符串表示清除昵称，页面回退显示账号
     const nickname = String(body.nickname).trim() || null;
@@ -94,6 +95,8 @@ export async function PUT(
       return NextResponse.json({ error: "密码长度需为 6-72 位" }, { status: 400 });
     }
     data.passwordHash = await hashPassword(password);
+    // 管理员重置密码后，该账号的全部会话作废，各端都需重新登录
+    passwordChanged = true;
   }
   if (body.role !== undefined) {
     // 角色只接受枚举值，避免小写等非法值被静默归一化后绕过「最后管理员」判断
@@ -105,10 +108,18 @@ export async function PUT(
   if (typeof body.active === "boolean") data.active = body.active;
 
   try {
-    const user = await prisma.user.update({
-      where: { id },
-      data,
-      select: userSelect,
+    // 改密码与会话作废放在同一事务，避免密码已改但旧会话仍可使用
+    const user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data,
+        select: userSelect,
+      });
+      if (passwordChanged || body.active === false) {
+        // 改密或禁用账号时作废该用户全部会话，避免重新启用后旧 token 复活
+        await tx.session.deleteMany({ where: { userId: id } });
+      }
+      return updated;
     });
     return NextResponse.json(user);
   } catch (e: unknown) {

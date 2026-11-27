@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, displayNameOf, getStoredUser, refreshStoredUser } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { api, displayNameOf, getStoredUser, logout, refreshStoredUser } from "@/lib/api";
 import { Modal, Field, inputCls, Loading, ErrorState } from "@/components/ui";
 import { useConfirm } from "@/components/ConfirmProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -17,6 +18,7 @@ interface UserRow {
 }
 
 export default function UsersPage() {
+  const router = useRouter();
   const { confirm } = useConfirm();
   const toast = useToast();
   const [list, setList] = useState<UserRow[]>([]);
@@ -87,6 +89,7 @@ export default function UsersPage() {
     }
     setSaving(true);
     try {
+      const changedOwnPassword = isSelf && !!form.password;
       if (editing) {
         const payload: Record<string, unknown> = { username, nickname: form.nickname.trim() };
         if (form.password) payload.password = form.password;
@@ -100,6 +103,13 @@ export default function UsersPage() {
         await api.post("/api/users", form);
       }
       setModalOpen(false);
+      if (changedOwnPassword) {
+        // 改自己的密码会让全部会话失效，直接回登录页，避免后续请求 401 被动跳转
+        toast.success("密码已更新，请重新登录");
+        logout();
+        router.replace("/login");
+        return;
+      }
       toast.success(editing ? "保存成功" : "新增成功");
       // 改的是自己时同步本地缓存，避免顶部/侧边栏仍显示旧账号名
       if (isSelf) void refreshStoredUser();

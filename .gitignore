@@ -40,5 +40,9 @@ next-env.d.ts
 # 微信开发者工具本地私有配置（含个人 AppID）
 /miniapp/project.private.config.json
 
+# 小程序环境配置（后端地址等本地信息，仅保留在本地）
+/miniapp/.env.development
+/miniapp/.env.production
+
 # 仅本地保存的技术文档
 /技术文档.md
